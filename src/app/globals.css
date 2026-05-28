@@ -1,26 +1,204 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap');
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand palette */
+  --brand-50:  #f0f4ff;
+  --brand-100: #e0eaff;
+  --brand-200: #c7d7fe;
+  --brand-400: #818cf8;
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+  --brand-700: #4338ca;
+
+  /* Surface colors */
+  --surface-0: #0f0f13;
+  --surface-1: #16161d;
+  --surface-2: #1e1e28;
+  --surface-3: #252531;
+  --surface-border: rgba(255,255,255,0.07);
+
+  /* Paper (editor) */
+  --paper-bg:  #fafaf8;
+  --paper-text: #1a1a2e;
+
+  /* Resize handle */
+  --handle-color: rgba(99,102,241,0.25);
+  --handle-hover: rgba(99,102,241,0.75);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--surface-0);
+  color: #e2e2ef;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.35); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.65); }
+
+/* ---------- Resize panel handle (react-resizable-panels v3 uses data-separator) ---------- */
+[data-separator] {
+  position: relative;
+  width: 5px !important;
+  background: var(--surface-border);
+  cursor: col-resize;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  min-width: 5px;
+}
+[data-separator]:hover {
+  background: rgba(99,102,241,0.4);
+}
+[data-separator]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 2px;
+  height: 40px;
+  border-radius: 99px;
+  background: rgba(99,102,241,0.8);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+[data-separator]:hover::after {
+  opacity: 1;
+}
+
+/* ---------- TipTap editor prose overrides ---------- */
+.tiptap-prose {
+  font-family: 'Lora', Georgia, serif;
+  color: var(--paper-text);
+  font-size: 1.0625rem;
+  line-height: 1.85;
+  caret-color: var(--brand-600);
+}
+
+.tiptap-prose:focus { outline: none; }
+
+.tiptap-prose p.is-editor-empty:first-child::before {
+  color: #b0adc5;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  font-style: italic;
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+}
+
+.tiptap-prose h1 {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 2rem;
+  line-height: 1.2;
+  color: #12122a;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.02em;
+}
+.tiptap-prose h2 {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 1.4rem;
+  color: #1e1e3f;
+  margin-top: 2rem;
+  letter-spacing: -0.01em;
+}
+.tiptap-prose h3 {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: #2d2d5e;
+}
+
+.tiptap-prose strong { color: #12122a; }
+.tiptap-prose em { color: #3d3d6b; }
+
+.tiptap-prose code {
+  background: #ededfc;
+  color: var(--brand-700);
+  padding: 0.15em 0.45em;
+  border-radius: 5px;
+  font-size: 0.88em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.tiptap-prose pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+}
+.tiptap-prose pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+.tiptap-prose blockquote {
+  border-left: 3px solid var(--brand-400);
+  padding-left: 1.25rem;
+  color: #5a5a8a;
+  font-style: italic;
+}
+
+.tiptap-prose hr {
+  border-color: #e0dff5;
+  margin: 2rem 0;
+}
+
+.tiptap-prose ul li::marker { color: var(--brand-500); }
+.tiptap-prose ol li::marker { color: var(--brand-500); font-weight: 600; }
+
+/* ---------- Excalidraw container ---------- */
+.excalidraw-wrapper {
+  width: 100%;
+  height: 100%;
+}
+.excalidraw-wrapper .excalidraw {
+  border-radius: 0;
+}
+
+/* ---------- Navbar glass ---------- */
+.navbar-glass {
+  background: rgba(22, 22, 29, 0.85);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+/* ---------- Badge / pill ---------- */
+.mode-pill {
+  background: rgba(99,102,241,0.15);
+  border: 1px solid rgba(99,102,241,0.3);
+  color: var(--brand-200);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.65rem;
+  border-radius: 99px;
+}
+
+/* ---------- Panel animations ---------- */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.panel-anim {
+  animation: fadeSlideIn 0.35s ease both;
 }
