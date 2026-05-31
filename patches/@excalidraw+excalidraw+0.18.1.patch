@@ -1,0 +1,185 @@
+diff --git a/node_modules/@excalidraw/excalidraw/dist/dev/chunk-4FTI6OG3.js b/node_modules/@excalidraw/excalidraw/dist/dev/chunk-4FTI6OG3.js
+index 65df46b..c97c9fb 100644
+--- a/node_modules/@excalidraw/excalidraw/dist/dev/chunk-4FTI6OG3.js
++++ b/node_modules/@excalidraw/excalidraw/dist/dev/chunk-4FTI6OG3.js
+@@ -9314,6 +9314,170 @@ function getFreeDrawPath2D(element) {
+   return pathsCache.get(element);
+ }
+ function getFreeDrawSvgPath(element) {
++  if (typeof window !== "undefined" && window.activePenType && window.penSettings) {
++    const type = window.activePenType;
++    const settings = window.penSettings;
++    const baseWidth = element.strokeWidth * 1.5;
++    const points = element.points;
++    if (points.length === 0) return "";
++    
++    // BALL PEN: Flawless uniform stroked line (using perfect-freehand with zero thinning for perfect round caps)
++    if (type === 'ball') {
++      const options = {
++        size: element.strokeWidth * 4.25,
++        thinning: 0.0, // ZERO pressure effect
++        smoothing: 0.5,
++        streamline: settings.stabilization / 100,
++        easing: (t) => Math.sin(t * Math.PI / 2),
++        last: !!element.lastCommittedPoint,
++        simulatePressure: false
++      };
++      return getSvgPathFromStroke2(getStroke(points, options));
++    }
++
++    const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
++    
++    // 1. STROKE STABILIZATION (Gaussian Kernel)
++    let processedPoints = points.map(p => [p[0], p[1]]);
++    if (settings.stabilization > 0) {
++      const strength = settings.stabilization;
++      const w = (strength / 100) * 0.92;
++      const radius = Math.round(lerp(1, 6, strength / 100));
++      const smoothed = [];
++      for (let i = 0; i < processedPoints.length; i++) {
++        let sx = 0, sy = 0, wSum = 0;
++        for (let j = -radius; j <= radius; j++) {
++          const ni = Math.min(Math.max(i + j, 0), processedPoints.length - 1);
++          const weight = Math.exp(-0.5 * (j * j) / (radius * radius));
++          sx += processedPoints[ni][0] * weight;
++          sy += processedPoints[ni][1] * weight;
++          wSum += weight;
++        }
++        smoothed.push([
++          processedPoints[i][0] * (1 - w) + (sx / wSum) * w,
++          processedPoints[i][1] * (1 - w) + (sy / wSum) * w
++        ]);
++      }
++      processedPoints = smoothed;
++    }
++
++    // 2. SIMULATE PRESSURE (Speed proxy + Power Curve)
++    const pressures = [];
++    const maxDistPerFrame = type === 'brush' ? 25 : 41.5; // Brush reaches min-width much faster
++    for (let i = 0; i < processedPoints.length; i++) {
++      let dist = 0;
++      if (i > 0) {
++        const dx = processedPoints[i][0] - processedPoints[i-1][0];
++        const dy = processedPoints[i][1] - processedPoints[i-1][1];
++        dist = Math.sqrt(dx*dx + dy*dy);
++      } else if (processedPoints.length > 1) {
++        const dx = processedPoints[1][0] - processedPoints[0][0];
++        const dy = processedPoints[1][1] - processedPoints[0][1];
++        dist = Math.sqrt(dx*dx + dy*dy);
++      }
++      const rawPressure = 1 - Math.min(dist / maxDistPerFrame, 1.0);
++      const power = type === 'brush' ? 0.35 : 0.6; // Steeper power curve for brush
++      pressures.push(Math.pow(rawPressure, power));
++    }
++
++    // 3. SMOOTH PRESSURE (Two-pass low-pass filter)
++    if (type !== 'ball' && pressures.length > 1) {
++      const fwdKeep = type === 'brush' ? 0.65 : 0.72;
++      const fwdNew  = type === 'brush' ? 0.35 : 0.28;
++      for (let i = 1; i < pressures.length; i++) {
++        pressures[i] = pressures[i-1] * fwdKeep + pressures[i] * fwdNew;
++      }
++      
++      const bwdKeep = type === 'brush' ? 0.55 : 0.6;
++      const bwdNew  = type === 'brush' ? 0.45 : 0.4;
++      for (let i = pressures.length - 2; i >= 0; i--) {
++        pressures[i] = pressures[i] * bwdKeep + pressures[i+1] * bwdNew;
++      }
++    }
++
++    // 4. COMPUTE DYNAMIC LINE WIDTHS
++    const widths = [];
++    const pSens = settings.pressureSens / 100;
++    
++    for (let i = 0; i < processedPoints.length; i++) {
++      let w = baseWidth;
++      
++      if (type === 'fountain') {
++        const BASE_MIN = 0.12;
++        const BASE_MAX = 1.0;
++        const minW = baseWidth * lerp(BASE_MAX * 0.7, BASE_MIN, pSens);
++        const maxW = baseWidth * BASE_MAX;
++        w = minW + (maxW - minW) * pressures[i];
++      } else if (type === 'brush') {
++        const minW = baseWidth * lerp(0.60, 0.03, pSens);
++        const maxW = baseWidth * lerp(1.20, 4.50, pSens);
++        const widthPressure = Math.pow(pressures[i], 0.5);
++        w = minW + (maxW - minW) * widthPressure;
++      }
++      widths.push(Math.max(0.01, w));
++    }
++
++    // 5. TIP SHARPNESS & ENTRY/EXIT TAPERS
++    if (type === 'fountain') {
++      const sharpness = settings.tipSharpness / 100;
++      const taperFraction = lerp(0.05, 0.35, sharpness);
++      const startCount = Math.max(2, Math.round(widths.length * taperFraction));
++      const endCount = Math.max(2, Math.round(widths.length * taperFraction * 0.85));
++      
++      for (let i = 0; i < startCount && i < widths.length; i++) {
++        const t = i / startCount;
++        widths[i] *= Math.pow(t, 0.45);
++      }
++      for (let i = 0; i < endCount && i < widths.length; i++) {
++        const idx = widths.length - 1 - i;
++        const t = i / endCount;
++        widths[idx] *= Math.pow(t, 1.6);
++      }
++    } else if (type === 'brush') {
++      const START_POINTS = Math.min(3, Math.floor(widths.length * 0.04));
++      for (let i = 0; i < START_POINTS; i++) {
++        const t = i / START_POINTS;
++        widths[i] *= 0.30 + 0.70 * Math.pow(t, 0.3);
++      }
++      const END_FRACTION = 0.18;
++      const endCount = Math.max(4, Math.round(widths.length * END_FRACTION));
++      for (let i = 0; i < endCount; i++) {
++        const idx = widths.length - 1 - i;
++        if (idx < 0) break;
++        const t = i / endCount;
++        widths[idx] *= Math.pow(t, 2.2);
++      }
++      if (widths.length > 0) widths[widths.length - 1] = 0;
++    }
++
++    // 6. BUILD VARIABLE WIDTH POLYGON
++    const leftPts = [];
++    const rightPts = [];
++    for (let i = 0; i < processedPoints.length; i++) {
++      const p = processedPoints[i];
++      let prev = processedPoints[Math.max(0, i - 1)];
++      let next = processedPoints[Math.min(processedPoints.length - 1, i + 1)];
++      if (i === 0) prev = p;
++      if (i === processedPoints.length - 1) next = p;
++      
++      let dx = next[0] - prev[0];
++      let dy = next[1] - prev[1];
++      let len = Math.sqrt(dx*dx + dy*dy);
++      
++      if (len === 0) { dx = 1; dy = 0; len = 1; }
++      
++      const nx = -dy / len;
++      const ny = dx / len;
++      const r = widths[i] / 2;
++      leftPts.push([p[0] + nx * r, p[1] + ny * r]);
++      rightPts.push([p[0] - nx * r, p[1] - ny * r]);
++    }
++
++    const polygon = [...leftPts, ...rightPts.reverse()];
++    return getSvgPathFromStroke2(polygon);
++  }
++
++  // Fallback to perfect-freehand if settings are missing
+   const inputPoints = element.simulatePressure ? element.points : element.points.length ? element.points.map(([x, y], i) => [x, y, element.pressures[i]]) : [[0, 0, 0.5]];
+   const options = {
+     simulatePressure: element.simulatePressure,
+@@ -9322,9 +9486,7 @@ function getFreeDrawSvgPath(element) {
+     smoothing: 0.5,
+     streamline: 0.5,
+     easing: (t) => Math.sin(t * Math.PI / 2),
+-    // https://easings.net/#easeOutSine
+     last: !!element.lastCommittedPoint
+-    // LastCommittedPoint is added on pointerup
+   };
+   return getSvgPathFromStroke2(getStroke(inputPoints, options));
+ }
