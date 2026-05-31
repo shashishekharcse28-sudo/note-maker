@@ -2,9 +2,10 @@
 
 import "@excalidraw/excalidraw/index.css";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import MyColorsPanel from "./MyColorsPanel";
+import { LIBRARY_ITEMS } from "./studyShapeLibrary.js";
 
 const ExcalidrawWithMenu = dynamic(
   async () => {
@@ -43,6 +44,15 @@ const ExcalidrawWithMenu = dynamic(
 
 export default function ExcalidrawCanvas() {
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
+
+  useEffect(() => {
+    if (excalidrawAPI) {
+      excalidrawAPI.updateLibrary({
+        libraryItems: LIBRARY_ITEMS,
+        merge: true,
+      });
+    }
+  }, [excalidrawAPI]);
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
