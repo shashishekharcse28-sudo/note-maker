@@ -480,29 +480,9 @@ const ExcalidrawWithMenu = dynamic(
   }
 );
 
-// ─── Canvas persistence ───────────────────────────────────────────────────────
-const CANVAS_STORAGE_KEY = "studyos-canvas";
-const CANVAS_SAVE_DEBOUNCE_MS = 1500;
-
-function loadCanvasData(): { elements: any[]; appState: Record<string, any> } | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const saved = localStorage.getItem(CANVAS_STORAGE_KEY);
-    if (saved) {
-      const data = JSON.parse(saved);
-      if (data?.elements?.length > 0) return data;
-    }
-  } catch {}
-  return null;
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function ExcalidrawCanvas() {
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
-
-  // ── Canvas auto-save ────────────────────────────────────────────────────────
-  const canvasSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialCanvasData = useRef(loadCanvasData());
 
   // UI state — drives button highlight only
   const [activeCustomTool, setActiveCustomTool] = useState<ShapeName | null>(null);
@@ -1372,29 +1352,6 @@ export default function ExcalidrawCanvas() {
         excalidrawAPI={handleExcalidrawAPI}
         UIOptions={uiOptions}
         renderTopRightUI={renderTopRightUI}
-        initialData={initialCanvasData.current ?? undefined}
-        onChange={(elements: any[], appState: any) => {
-          // Debounced auto-save to localStorage
-          if (canvasSaveTimerRef.current) clearTimeout(canvasSaveTimerRef.current);
-          canvasSaveTimerRef.current = setTimeout(() => {
-            try {
-              const serializableState = {
-                currentItemStrokeColor: appState.currentItemStrokeColor,
-                currentItemBackgroundColor: appState.currentItemBackgroundColor,
-                currentItemFillStyle: appState.currentItemFillStyle,
-                currentItemStrokeWidth: appState.currentItemStrokeWidth,
-                currentItemStrokeStyle: appState.currentItemStrokeStyle,
-                currentItemRoughness: appState.currentItemRoughness,
-                viewBackgroundColor: appState.viewBackgroundColor,
-              };
-              const data = JSON.stringify({
-                elements: elements.filter((el: any) => !el.isDeleted),
-                appState: serializableState,
-              });
-              localStorage.setItem(CANVAS_STORAGE_KEY, data);
-            } catch {}
-          }, CANVAS_SAVE_DEBOUNCE_MS);
-        }}
       />
 
       <MyColorsPanel excalidrawAPI={excalidrawAPI} isCustomShapeActive={!!activeCustomTool} />

@@ -1,10 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
-
-// ─── Title persistence ────────────────────────────────────────────────────────
-const TITLE_STORAGE_KEY = "studyos-doc-title";
 
 // ─── Logo mark ───────────────────────────────────────────────────────────────
 function LogoMark() {
@@ -120,20 +116,6 @@ interface NavBarProps {
 }
 
 export default function NavBar({ documentTitle = "Untitled Document" }: NavBarProps) {
-  const [title, setTitle] = useState(() => {
-    if (typeof window === "undefined") return documentTitle;
-    try {
-      const saved = localStorage.getItem(TITLE_STORAGE_KEY);
-      return saved || documentTitle;
-    } catch { return documentTitle; }
-  });
-
-  // Sync title to browser tab and localStorage
-  useEffect(() => {
-    document.title = `${title} — StudyOS`;
-    localStorage.setItem(TITLE_STORAGE_KEY, title);
-  }, [title]);
-
   return (
     <nav
       className="navbar-glass"
@@ -184,10 +166,10 @@ export default function NavBar({ documentTitle = "Untitled Document" }: NavBarPr
         }}
       />
 
-      {/* Document title (editable + persisted) */}
+      {/* Document title (editable feel) */}
       <input
         type="text"
-        value={title}
+        defaultValue={documentTitle}
         aria-label="Document title"
         style={{
           background: "transparent",
@@ -202,14 +184,11 @@ export default function NavBar({ documentTitle = "Untitled Document" }: NavBarPr
           cursor: "text",
           minWidth: 0,
         }}
-        onChange={(e) => setTitle(e.target.value)}
         onFocus={(e) => {
           e.currentTarget.style.color = "#e2e2ef";
         }}
         onBlur={(e) => {
           e.currentTarget.style.color = "#c8c8e8";
-          // Clean up empty titles
-          if (!title.trim()) setTitle("Untitled Document");
         }}
       />
 
