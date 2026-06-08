@@ -4,7 +4,24 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Typography from "@tiptap/extension-typography";
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
+
+// ─── Persistence ──────────────────────────────────────────────────────────────
+const EDITOR_STORAGE_KEY = "studyos-editor-content";
+const SAVE_DEBOUNCE_MS = 1000;
+
+function loadSavedContent(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const saved = localStorage.getItem(EDITOR_STORAGE_KEY);
+    if (saved) {
+      // Validate it's parseable JSON (TipTap JSON format)
+      JSON.parse(saved);
+      return saved;
+    }
+  } catch {}
+  return null;
+}
 
 // ─── Toolbar button component ────────────────────────────────────────────────
 interface ToolbarButtonProps {
@@ -93,6 +110,14 @@ function WordCount({ text }: { text: string }) {
 
 // ─── Main TipTap Editor component ───────────────────────────────────────────
 export default function TipTapEditor() {
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load saved content on mount
+  const savedJSON = loadSavedContent();
+  const initialContent = savedJSON
+    ? JSON.parse(savedJSON)
+    : `<h1>My Study Notes</h1><p>Start writing here. Use the toolbar above or Markdown shortcuts.</p>`;
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -104,12 +129,22 @@ export default function TipTapEditor() {
       }),
       Typography,
     ],
-    content: `<h1>My Study Notes</h1><p>Start writing here. Use the toolbar above or Markdown shortcuts.</p>`,
+    content: initialContent,
     editorProps: {
       attributes: {
         class: "tiptap-prose",
         spellcheck: "true",
       },
+    },
+    onUpdate: ({ editor: ed }) => {
+      // Debounced auto-save
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        try {
+          const json = JSON.stringify(ed.getJSON());
+          localStorage.setItem(EDITOR_STORAGE_KEY, json);
+        } catch {}
+      }, SAVE_DEBOUNCE_MS);
     },
   });
 
@@ -119,6 +154,13 @@ export default function TipTapEditor() {
       setTimeout(() => editor.commands.focus("end"), 100);
     }
   }, [editor]);
+
+  // Cleanup debounce timer
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
 
   if (!editor) return null;
 
