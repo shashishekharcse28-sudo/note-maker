@@ -619,8 +619,13 @@ export default function ExcalidrawCanvas() {
       const ex = offX + (el.x + scrollX) * zoom;
       const ey = offY + (el.y + scrollY) * zoom;
 
-      // Chisel stroke width: 3× the original, minimum 12px screen-space
-      const strokeW = Math.max(12, (hlData.width * 3) * zoom);
+      // Map Excalidraw's stroke widths (1=Thin, 2=Bold, 4=Extra Bold) to distinct highlighter sizes
+      let baseW = 24; // default to medium
+      if (hlData.width <= 1.5) baseW = 12; // Thin
+      else if (hlData.width <= 2.5) baseW = 24; // Medium
+      else baseW = 36; // Thick
+      
+      const strokeW = baseW * zoom;
 
       // ── Pass 1: Render stroke at full opacity onto an offscreen canvas ──
       // This prevents self-overlap darkening within one stroke.
@@ -1595,16 +1600,44 @@ export default function ExcalidrawCanvas() {
           const isHighlighter = (window as any).activePenType === 'highlighter';
 
           if (isHighlighter) {
-            // Tag any freedraw elements we haven't seen yet
+            // Tag any new freedraw elements
             for (const el of elements) {
-              if (el.type === 'freedraw' && !el.isDeleted && !highlighterSetRef.current.has(el.id)) {
-                // Only tag if not already a full-opacity normal stroke
-                // (opacity 100 = normal, opacity 5 = already suppressed)
-                if (el.opacity === 100) {
+              if (el.type === 'freedraw' && !el.isDeleted) {
+                if (!highlighterSetRef.current.has(el.id)) {
+                  // Only tag if not already a full-opacity normal stroke
+                  // (opacity 100 = normal, opacity 5 = already suppressed)
+                  if (el.opacity === 100) {
+                    highlighterSetRef.current.set(el.id, {
+                      color: el.strokeColor || '#ffeb3b',
+                      width: el.strokeWidth || 2,
+                    });
+                  }
+                } else {
+                  // Sync properties if the user selected an existing highlight and changed its color/width
+                  const hlData = highlighterSetRef.current.get(el.id)!;
+                  if (hlData.color !== el.strokeColor || hlData.width !== el.strokeWidth) {
+                    highlighterSetRef.current.set(el.id, {
+                      color: el.strokeColor || hlData.color,
+                      width: el.strokeWidth || hlData.width,
+                    });
+                    // Persist since we changed an existing one
+                    persistHighlighterIds();
+                  }
+                }
+              }
+            }
+          } else {
+            // Even if NOT in highlighter mode, if user selects an existing highlighter stroke 
+            // and changes its color/width, we should sync it.
+            for (const el of elements) {
+              if (el.type === 'freedraw' && !el.isDeleted && highlighterSetRef.current.has(el.id)) {
+                const hlData = highlighterSetRef.current.get(el.id)!;
+                if (hlData.color !== el.strokeColor || hlData.width !== el.strokeWidth) {
                   highlighterSetRef.current.set(el.id, {
-                    color: el.strokeColor || '#ffeb3b',
-                    width: el.strokeWidth || 2,
+                    color: el.strokeColor || hlData.color,
+                    width: el.strokeWidth || hlData.width,
                   });
+                  persistHighlighterIds();
                 }
               }
             }
