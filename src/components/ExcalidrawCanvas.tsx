@@ -808,7 +808,7 @@ export default function ExcalidrawCanvas() {
   // ── Highlighter: suppress native rendering after stroke completes ────────
   // We listen for pointerup on the canvas. After the user lifts their pen,
   // we wait 300ms (giving Excalidraw time to finalize the element), then
-  // set opacity=5 on any tagged highlighter elements that still have opacity=100.
+  // set opacity=0 on any tagged highlighter elements that still have opacity=100.
   // This deferred approach avoids the fatal bug where updateScene() during
   // an active freedraw gesture aborts it after 1 point.
   useEffect(() => {
@@ -826,11 +826,11 @@ export default function ExcalidrawCanvas() {
         const updated = elements.map((el: any) => {
           if (
             highlighterSetRef.current.has(el.id) &&
-            el.opacity !== 5 &&
+            el.opacity !== 0 &&
             !el.isDeleted
           ) {
             changed = true;
-            return { ...el, opacity: 5 };
+            return { ...el, opacity: 0 };
           }
           return el;
         });
@@ -1605,7 +1605,7 @@ export default function ExcalidrawCanvas() {
               if (el.type === 'freedraw' && !el.isDeleted) {
                 if (!highlighterSetRef.current.has(el.id)) {
                   // Only tag if not already a full-opacity normal stroke
-                  // (opacity 100 = normal, opacity 5 = already suppressed)
+                  // (opacity 100 = normal, opacity 0 = already suppressed)
                   if (el.opacity === 100) {
                     highlighterSetRef.current.set(el.id, {
                       color: el.strokeColor || '#ffeb3b',
