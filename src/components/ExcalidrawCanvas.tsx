@@ -676,7 +676,9 @@ export default function ExcalidrawCanvas() {
       // ── Pass 2: Composite offscreen → main canvas with multiply + flat alpha ──
       ctx.save();
       ctx.globalCompositeOperation = 'multiply';
-      ctx.globalAlpha = 0.35;  // 35% opacity — matches GoodNotes translucency
+      // Dynamically map the user's selected opacity (0-100) to the canvas alpha
+      const opacityFraction = (el.opacity ?? 100) / 100;
+      ctx.globalAlpha = 0.4 * opacityFraction;  // 40% max opacity — matches GoodNotes translucency
       ctx.drawImage(offscreen, 0, 0, w, h);
       ctx.restore();
     }
@@ -808,9 +810,11 @@ export default function ExcalidrawCanvas() {
   // ── Highlighter: suppress native rendering after stroke completes ────────
   // We listen for pointerup on the canvas. After the user lifts their pen,
   // we wait 300ms (giving Excalidraw time to finalize the element), then
-  // set opacity=0 on any tagged highlighter elements that still have opacity=100.
+  // set strokeColor='transparent' on any tagged highlighter elements.
   // This deferred approach avoids the fatal bug where updateScene() during
   // an active freedraw gesture aborts it after 1 point.
+  // Using transparent strokeColor hides the middle line while preserving
+  // the functionality of the native Opacity slider perfectly.
   useEffect(() => {
     if (!excalidrawAPI) return;
 
@@ -824,13 +828,24 @@ export default function ExcalidrawCanvas() {
         const elements = api.getSceneElements() as any[];
         let changed = false;
         const updated = elements.map((el: any) => {
-          if (
-            highlighterSetRef.current.has(el.id) &&
-            el.opacity !== 0 &&
-            !el.isDeleted
-          ) {
-            changed = true;
-            return { ...el, opacity: 0 };
+          if (highlighterSetRef.current.has(el.id) && !el.isDeleted) {
+            let needsChange = false;
+            let newEl = { ...el };
+            
+            if (el.strokeColor !== 'transparent') {
+              newEl.strokeColor = 'transparent';
+              needsChange = true;
+            }
+            // Recover test strokes from previous patch
+            if (el.opacity === 0) {
+              newEl.opacity = 100;
+              needsChange = true;
+            }
+            
+            if (needsChange) {
+              changed = true;
+              return newEl;
+            }
           }
           return el;
         });
@@ -1597,49 +1612,83 @@ export default function ExcalidrawCanvas() {
           if (!api) return;
 
           const elements = api.getSceneElements() as any[];
+          const appState = api.getAppState();
           const isHighlighter = (window as any).activePenType === 'highlighter';
 
-          if (isHighlighter) {
-            // Tag any new freedraw elements
+          // We check if the user is actively drawing a stroke vs selecting/modifying
+          // We CANNOT call updateScene while actively drawing (it aborts the gesture).
+          const isActivelyDrawing = appState.activeTool.type === 'freedraw';
+          let needsUpdate = false;
+          const updates: any[] = [];
+
+          if (isHighlighter && isActivelyDrawing) {
+            // Tag any new freedraw elements while drawing
             for (const el of elements) {
               if (el.type === 'freedraw' && !el.isDeleted) {
-                if (!highlighterSetRef.current.has(el.id)) {
-                  // Only tag if not already a full-opacity normal stroke
-                  // (opacity 100 = normal, opacity 0 = already suppressed)
-                  if (el.opacity === 100) {
-                    highlighterSetRef.current.set(el.id, {
-                      color: el.strokeColor || '#ffeb3b',
-                      width: el.strokeWidth || 2,
-                    });
-                  }
-                } else {
-                  // Sync properties if the user selected an existing highlight and changed its color/width
-                  const hlData = highlighterSetRef.current.get(el.id)!;
-                  if (hlData.color !== el.strokeColor || hlData.width !== el.strokeWidth) {
-                    highlighterSetRef.current.set(el.id, {
-                      color: el.strokeColor || hlData.color,
-                      width: el.strokeWidth || hlData.width,
-                    });
-                    // Persist since we changed an existing one
-                    persistHighlighterIds();
-                  }
+                if (!highlighterSetRef.current.has(el.id) && el.strokeColor !== 'transparent') {
+                  highlighterSetRef.current.set(el.id, {
+                    color: el.strokeColor || '#ffeb3b',
+                    width: el.strokeWidth || 2,
+                  });
                 }
               }
             }
           } else {
-            // Even if NOT in highlighter mode, if user selects an existing highlighter stroke 
-            // and changes its color/width, we should sync it.
+            // The user is selecting/modifying existing strokes (e.g. changing color or opacity).
+            // It is safe to call updateScene to enforce strokeColor = 'transparent'.
             for (const el of elements) {
               if (el.type === 'freedraw' && !el.isDeleted && highlighterSetRef.current.has(el.id)) {
                 const hlData = highlighterSetRef.current.get(el.id)!;
-                if (hlData.color !== el.strokeColor || hlData.width !== el.strokeWidth) {
-                  highlighterSetRef.current.set(el.id, {
-                    color: el.strokeColor || hlData.color,
-                    width: el.strokeWidth || hlData.width,
-                  });
+                let dataChanged = false;
+
+                // 1. If user clicked a new color in the picker, update our ref and force it transparent
+                if (el.strokeColor !== 'transparent') {
+                  hlData.color = el.strokeColor;
+                  dataChanged = true;
+                  
+                  let updEl = updates.find(u => u.id === el.id);
+                  if (!updEl) {
+                    updEl = { ...el };
+                    updates.push(updEl);
+                  }
+                  updEl.strokeColor = 'transparent';
+                  needsUpdate = true;
+                }
+                
+                // Recover from previous patch
+                if (el.opacity === 0) {
+                  let updEl = updates.find(u => u.id === el.id);
+                  if (!updEl) {
+                    updEl = { ...el };
+                    updates.push(updEl);
+                  }
+                  updEl.opacity = 100;
+                  needsUpdate = true;
+                }
+                
+                // 2. If user changed stroke width
+                if (hlData.width !== el.strokeWidth) {
+                  hlData.width = el.strokeWidth;
+                  dataChanged = true;
+                }
+
+                // Note: We DO NOT force el.opacity! We leave it exactly as the user sets it.
+                // Our custom drawHighlighter reads el.opacity directly, so the slider works perfectly.
+                
+                if (dataChanged) {
+                  highlighterSetRef.current.set(el.id, hlData);
                   persistHighlighterIds();
                 }
               }
+            }
+
+            if (needsUpdate) {
+              api.updateScene({
+                elements: elements.map(el => {
+                  const upd = updates.find(u => u.id === el.id);
+                  return upd || el;
+                }),
+              });
             }
           }
 
