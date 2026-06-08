@@ -387,37 +387,7 @@ function SlashMenu({
   );
 }
 
-// ─── Toolbar primitives ─────────────────────────────────────────────────────────
-function TB({ onClick, active, disabled, title, children }: {
-  onClick: () => void; active?: boolean; disabled?: boolean; title: string; children: React.ReactNode;
-}) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} title={title}
-      style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 28, height: 28, borderRadius: 6, border: "none",
-        cursor: disabled ? "default" : "pointer",
-        background: active ? "rgba(99,102,241,0.18)" : "transparent",
-        color:      active ? "#6366f1" : "#6b6b8a",
-        fontSize: "0.8rem", fontWeight: 600,
-        transition: "all 0.15s", opacity: disabled ? 0.35 : 1,
-      }}
-      onMouseEnter={e => {
-        if (!disabled) {
-          (e.currentTarget as HTMLElement).style.background = active ? "rgba(99,102,241,0.25)" : "rgba(0,0,0,0.06)";
-          (e.currentTarget as HTMLElement).style.color = "#4f46e5";
-        }
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.background = active ? "rgba(99,102,241,0.18)" : "transparent";
-        (e.currentTarget as HTMLElement).style.color = active ? "#6366f1" : "#6b6b8a";
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-const Sep = () => <div style={{ width: 1, height: 20, background: "rgba(0,0,0,0.1)", margin: "0 4px", flexShrink: 0 }} />;
+
 
 // ─── Main component ─────────────────────────────────────────────────────────────
 export default function TipTapEditor() {
@@ -492,32 +462,6 @@ export default function TipTapEditor() {
       `}</style>
 
       <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--paper-bg)" }}>
-
-        {/* ── Toolbar ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "8px 16px", background: "#f4f3f8", borderBottom: "1px solid #e5e4f0", flexShrink: 0, flexWrap: "wrap" }}>
-          <TB onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo">↩</TB>
-          <TB onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo">↪</TB>
-          <Sep />
-          <TB onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} title="H1">H1</TB>
-          <TB onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} title="H2">H2</TB>
-          <TB onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive("heading", { level: 3 })} title="H3">H3</TB>
-          <Sep />
-          <TB onClick={() => editor.chain().focus().toggleBold().run()}          active={editor.isActive("bold")}      title="Bold"><strong>B</strong></TB>
-          <TB onClick={() => editor.chain().focus().toggleItalic().run()}        active={editor.isActive("italic")}    title="Italic"><em>I</em></TB>
-          <TB onClick={() => editor.chain().focus().toggleStrike().run()}        active={editor.isActive("strike")}    title="Strike"><s>S</s></TB>
-          <TB onClick={() => editor.chain().focus().toggleCode().run()}          active={editor.isActive("code")}      title="Code">{"<>"}</TB>
-          <Sep />
-          <TB onClick={() => editor.chain().focus().toggleBulletList().run()}    active={editor.isActive("bulletList")}  title="Bullet">•≡</TB>
-          <TB onClick={() => editor.chain().focus().toggleOrderedList().run()}   active={editor.isActive("orderedList")} title="Numbered">1≡</TB>
-          <Sep />
-          <TB onClick={() => editor.chain().focus().toggleBlockquote().run()}    active={editor.isActive("blockquote")}  title="Quote">❝</TB>
-          <TB onClick={() => editor.chain().focus().toggleCodeBlock().run()}     active={editor.isActive("codeBlock")}   title="Code block">⌨</TB>
-          <TB onClick={() => editor.chain().focus().setHorizontalRule().run()}   title="Divider">─</TB>
-          <div style={{ flex: 1 }} />
-          <span style={{ fontSize: "0.7rem", color: "#a0a0b8", fontFamily: "'Inter', sans-serif" }}>
-            {editor.getText().trim().split(/\s+/).filter(Boolean).length} words
-          </span>
-        </div>
 
         {/* ── Editor area ── */}
         <div style={{ flex: 1, overflowY: "auto", padding: "40px 56px 80px", position: "relative" }}>
