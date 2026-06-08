@@ -36,9 +36,9 @@ const BrushIcon = () => (
   </svg>
 );
 
-interface Props { excalidrawAPI: any | null; }
+interface Props { excalidrawAPI: any | null; isCustomShapeActive?: boolean; }
 
-export default function MyColorsPanel({ excalidrawAPI }: Props) {
+export default function MyColorsPanel({ excalidrawAPI, isCustomShapeActive }: Props) {
   const [colors, setColors] = useState<string[]>(() => {
     if (typeof window === "undefined") return DEFAULT_COLORS;
     try { const s = localStorage.getItem("studyos-my-colors"); return s ? JSON.parse(s) : DEFAULT_COLORS; }
@@ -56,14 +56,16 @@ export default function MyColorsPanel({ excalidrawAPI }: Props) {
   const [stabilization, setStabilization] = useState(0);
   const [isPenActive, setIsPenActive] = useState(false);
   const [isEraserActive, setIsEraserActive] = useState(false);
+  const [isShapeToolActive, setIsShapeToolActive] = useState(false);
+  const [isSelectionActive, setIsSelectionActive] = useState(false); // ← CHANGED: track selection tool
 
   // Expose pen settings to window
   useEffect(() => {
     if (typeof window !== "undefined") {
-      (window as any).activePenType = penType;
+      (window as any).activePenType = (isShapeToolActive || isCustomShapeActive) ? "none" : penType;
       (window as any).penSettings = { tipSharpness, pressureSens, stabilization };
     }
-  }, [penType, tipSharpness, pressureSens, stabilization]);
+  }, [penType, tipSharpness, pressureSens, stabilization, isShapeToolActive, isCustomShapeActive]);
 
 
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -102,31 +104,54 @@ export default function MyColorsPanel({ excalidrawAPI }: Props) {
     if (!excalidrawAPI) return;
 
     const sync = () => {
-      try {
-        const appState = excalidrawAPI.getAppState();
-        const elements = excalidrawAPI.getSceneElements();
-        const { selectedElementIds, currentItemStrokeColor, activeTool } = appState;
-        
-        setIsPenActive(activeTool?.type === "freedraw");
-        const eraser = activeTool?.type === "eraser";
-        setIsEraserActive(eraser);
-        if (eraser) setShowPicker(false);
-        
-        const selectedKeys = Object.keys(selectedElementIds || {});
-        let stroke = currentItemStrokeColor as string;
+      // Defer state updates until AFTER Excalidraw finishes its current render cycle.
+      // Calling setState synchronously during Excalidraw's onChange triggers React's
+      // "Cannot update a component while rendering a different component" warning.
+      setTimeout(() => {
+        try {
+          const appState = excalidrawAPI.getAppState();
+          const elements = excalidrawAPI.getSceneElements();
+          const { selectedElementIds, currentItemStrokeColor, activeTool } = appState;
+          
+          setIsPenActive(activeTool?.type === "freedraw");
+          const eraser = activeTool?.type === "eraser";
+          setIsEraserActive(eraser);
+          if (eraser) setShowPicker(false);
 
-        if (selectedKeys.length > 0) {
-          const el = elements.find((e: any) => selectedElementIds[e.id]);
-          if (el?.strokeColor) stroke = el.strokeColor;
-        }
+          // nav tool awareness — only hide when nav + nothing selected.
+          // When elements ARE selected (e.g. just finished drawing a shape),
+          // keep the panel visible so MY COLORS remains accessible.
+          const isNavTool = activeTool?.type === "selection" || activeTool?.type === "hand";
+          const hasSelectedElements = Object.keys(selectedElementIds || {}).length > 0;
+          const shouldHideForNav = isNavTool && !hasSelectedElements;
+          setIsSelectionActive(shouldHideForNav);
+          if (shouldHideForNav) setShowPicker(false);
 
-        const norm = stroke?.toLowerCase();
-        if (norm && colors.map(c => c.toLowerCase()).includes(norm)) {
-          setActiveColor(norm);
-        } else {
-          setActiveColor(null);
-        }
-      } catch {}
+          const SHAPE_TOOLS = new Set([
+            "rectangle","ellipse","diamond","arrow","line",
+            "text","image","frame","embeddable","laser"
+          ]);
+          // Pen Type stays hidden for shape tools AND for nav tools (even with selection),
+          // so we never show fountain/ball/brush options in editing mode.
+          const isShape = SHAPE_TOOLS.has(activeTool?.type) || isNavTool;
+          setIsShapeToolActive(isShape);
+          
+          const selectedKeys = Object.keys(selectedElementIds || {});
+          let stroke = currentItemStrokeColor as string;
+
+          if (selectedKeys.length > 0) {
+            const el = elements.find((e: any) => selectedElementIds[e.id]);
+            if (el?.strokeColor) stroke = el.strokeColor;
+          }
+
+          const norm = stroke?.toLowerCase();
+          if (norm && colors.map(c => c.toLowerCase()).includes(norm)) {
+            setActiveColor(norm);
+          } else {
+            setActiveColor(null);
+          }
+        } catch {}
+      }, 0);
     };
 
     sync();
@@ -260,7 +285,7 @@ export default function MyColorsPanel({ excalidrawAPI }: Props) {
           borderBottom: "none",
           boxShadow: "var(--shadow-island, 0 1px 5px rgba(0,0,0,.15))",
           clipPath: "inset(-20px -20px 0 -20px)", // Hides the bottom shadow to create a seamless joint
-          display: isEraserActive ? "none" : undefined,
+          display: (isEraserActive || isSelectionActive) ? "none" : undefined, // ← CHANGED: also hide on selection
         }}
       >
 
@@ -302,6 +327,7 @@ export default function MyColorsPanel({ excalidrawAPI }: Props) {
         </div>
 
         {/* ── PEN TYPE SECTION ── */}
+        {!isShapeToolActive && !isCustomShapeActive && (
         <div style={{ paddingTop: 6 }}>
           <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--color-on-surface-low, #868e96)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 7, fontFamily: "Assistant, system-ui, sans-serif" }}>
             Pen Type
@@ -361,6 +387,7 @@ export default function MyColorsPanel({ excalidrawAPI }: Props) {
             </div>
           </div>
         </div>
+        )}
         </>)}
       </div>
 

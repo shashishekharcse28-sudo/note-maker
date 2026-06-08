@@ -1,3 +1,5 @@
+/* Fonts are loaded via next/font/google in layout.tsx (zero layout shift, self-hosted).
+   CSS variables --font-caveat and --font-inter are injected on <html> by Next.js. */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap');
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
@@ -26,6 +28,11 @@
   /* Resize handle */
   --handle-color: rgba(99,102,241,0.25);
   --handle-hover: rgba(99,102,241,0.75);
+
+  /* Font stacks — variables injected by next/font/google on <html> */
+  --font-heading: var(--font-caveat), 'Caveat', cursive;
+  --font-body:    var(--font-caveat), 'Caveat', cursive;
+  --font-ui:      var(--font-inter),  'Inter',  system-ui, sans-serif;
 }
 
 *, *::before, *::after {
@@ -38,7 +45,9 @@ html, body {
   padding: 0;
   background: var(--surface-0);
   color: #e2e2ef;
-  font-family: 'Inter', system-ui, sans-serif;
+  /* Caveat — the beautiful handwritten font used throughout the app */
+  font-family: var(--font-body);
+  font-size: 1rem;
   -webkit-font-smoothing: antialiased;
 }
 

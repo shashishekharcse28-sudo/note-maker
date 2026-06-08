@@ -145,11 +145,11 @@ export default function NavBar({ documentTitle = "Untitled Document" }: NavBarPr
         <LogoMark />
         <span
           style={{
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: "'Caveat', cursive",
             fontWeight: 700,
-            fontSize: "1rem",
+            fontSize: "1.25rem",
             color: "#e2e2ef",
-            letterSpacing: "-0.02em",
+            letterSpacing: "0em",
           }}
         >
           Study<span style={{ color: "#818cf8" }}>OS</span>
@@ -176,8 +176,8 @@ export default function NavBar({ documentTitle = "Untitled Document" }: NavBarPr
           border: "none",
           outline: "none",
           color: "#c8c8e8",
-          fontSize: "0.875rem",
-          fontFamily: "'Inter', sans-serif",
+          fontSize: "1.05rem",
+          fontFamily: "'Caveat', cursive",
           fontWeight: 500,
           maxWidth: "260px",
           flex: 1,
