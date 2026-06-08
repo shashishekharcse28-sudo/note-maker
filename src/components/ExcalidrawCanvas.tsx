@@ -503,6 +503,180 @@ export default function ExcalidrawCanvas() {
   const dotCanvasRef      = useRef<HTMLCanvasElement>(null);
   const wrapperRef        = useRef<HTMLDivElement>(null);
 
+  // ── Highlighter overlay ─────────────────────────────────────────────────
+  // GoodNotes-style highlighter implementation:
+  //
+  // PHYSICS / MATH:
+  // • Multiply blend mode — color values are multiplied: result = (src × dst) / 255.
+  //   On white (#fff) background, multiply is identity → pure highlight color shows.
+  //   On ink (#000), multiply darkens → text stays readable through the highlight.
+  // • Flat alpha (35%) across entire stroke — NO self-overlap darkening within a
+  //   single stroke. Achieved by rendering each stroke as one path on an offscreen
+  //   canvas, then compositing the result onto the main overlay with flat alpha.
+  // • Wide chisel-like stroke width (3× the original) — simulates a physical marker.
+  // • Round line caps + joins for smooth, natural appearance.
+  //
+  // ARCHITECTURE:
+  // • highlighterSetRef maps element ID → { color, strokeWidth } captured at draw time.
+  // • When activePenType === 'highlighter', we tag new freedraw elements and set their
+  //   Excalidraw opacity to 5 (nearly invisible) so the native renderer doesn't double-draw.
+  // • drawHighlighter() re-renders all tagged strokes onto highlighterCanvasRef using
+  //   multiply compositing, positioned in sync with Excalidraw's zoom/scroll.
+
+  const highlighterSetRef    = useRef<Map<string, { color: string; width: number }>>(new Map());
+  const highlighterCanvasRef = useRef<HTMLCanvasElement>(null);
+  // Track element count so we know when new elements appear
+  const prevElementCountRef  = useRef(0);
+
+  // Persist highlighter IDs to localStorage so they survive page refreshes
+  const HIGHLIGHTER_STORAGE_KEY = 'studyos-highlighter-ids';
+
+  // Load persisted highlighter IDs on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HIGHLIGHTER_STORAGE_KEY);
+      if (raw) {
+        const entries = JSON.parse(raw) as Array<[string, { color: string; width: number }]>;
+        entries.forEach(([id, data]) => highlighterSetRef.current.set(id, data));
+      }
+    } catch {}
+  }, []);
+
+  // Save highlighter IDs whenever they change
+  const persistHighlighterIds = useCallback(() => {
+    try {
+      const entries = Array.from(highlighterSetRef.current.entries());
+      localStorage.setItem(HIGHLIGHTER_STORAGE_KEY, JSON.stringify(entries));
+    } catch {}
+  }, []);
+
+  // Renders all highlighter strokes onto highlighterCanvasRef.
+  //
+  // For each tagged freedraw element:
+  //   1. Read el.points[] (relative to el.x, el.y)
+  //   2. Convert to overlay-canvas coordinates using zoom/scroll
+  //   3. Stroke the path with chisel width, round caps, on an offscreen canvas
+  //   4. Composite the offscreen result onto the main overlay using globalAlpha=0.35
+  //      and globalCompositeOperation='multiply'
+  //
+  // This two-pass approach (offscreen → composite) ensures that self-overlapping
+  // regions within a single stroke do NOT darken — the entire stroke is uniformly
+  // semi-transparent, exactly like a real highlighter marker.
+  const drawHighlighter = useCallback(() => {
+    const canvas = highlighterCanvasRef.current;
+    const api    = apiRef.current;
+    if (!canvas || !api) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const wrap = wrapperRef.current;
+    if (wrap) {
+      const dpr = window.devicePixelRatio || 1;
+      const w = wrap.clientWidth;
+      const h = wrap.clientHeight;
+      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+        canvas.width  = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width  = w + 'px';
+        canvas.style.height = h + 'px';
+        ctx.scale(dpr, dpr);
+      }
+    }
+
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const h = canvas.height / (window.devicePixelRatio || 1);
+    ctx.clearRect(0, 0, w, h);
+
+    if (highlighterSetRef.current.size === 0) return;
+
+    // Compute coordinate offsets
+    const excCvs = document.querySelector('.excalidraw__canvas') as HTMLElement | null;
+    if (!excCvs) return;
+    const excRect  = excCvs.getBoundingClientRect();
+    const wrapRect = canvas.getBoundingClientRect();
+    const offX = excRect.left - wrapRect.left;
+    const offY = excRect.top  - wrapRect.top;
+
+    const appState = api.getAppState();
+    const zoom     = appState.zoom.value;
+    const scrollX  = appState.scrollX;
+    const scrollY  = appState.scrollY;
+    const elements = api.getSceneElements() as any[];
+
+    // Clean up deleted elements
+    for (const [elId] of highlighterSetRef.current) {
+      const el = elements.find((e: any) => e.id === elId);
+      if (!el || el.isDeleted) highlighterSetRef.current.delete(elId);
+    }
+
+    for (const [elId, hlData] of highlighterSetRef.current) {
+      const el = elements.find((e: any) => e.id === elId);
+      if (!el || el.isDeleted || !el.points || el.points.length < 2) continue;
+
+      const pts = el.points as [number, number][];
+      // Element origin in overlay-canvas coordinates
+      const ex = offX + (el.x + scrollX) * zoom;
+      const ey = offY + (el.y + scrollY) * zoom;
+
+      // Chisel stroke width: 3× the original, minimum 12px screen-space
+      const strokeW = Math.max(12, (hlData.width * 3) * zoom);
+
+      // ── Pass 1: Render stroke at full opacity onto an offscreen canvas ──
+      // This prevents self-overlap darkening within one stroke.
+      const offscreen = new OffscreenCanvas(
+        Math.ceil(w * (window.devicePixelRatio || 1)),
+        Math.ceil(h * (window.devicePixelRatio || 1))
+      );
+      const offCtx = offscreen.getContext('2d')!;
+      const dpr = window.devicePixelRatio || 1;
+      offCtx.scale(dpr, dpr);
+
+      offCtx.beginPath();
+      offCtx.moveTo(ex + pts[0][0] * zoom, ey + pts[0][1] * zoom);
+
+      // Catmull-Rom spline interpolation for smooth curves (GoodNotes uses this
+      // for natural-feeling strokes). For each segment, we compute control points
+      // from the surrounding points to create a smooth cubic Bézier curve.
+      if (pts.length > 2) {
+        for (let i = 0; i < pts.length - 1; i++) {
+          const p0 = pts[Math.max(0, i - 1)];
+          const p1 = pts[i];
+          const p2 = pts[Math.min(pts.length - 1, i + 1)];
+          const p3 = pts[Math.min(pts.length - 1, i + 2)];
+
+          // Catmull-Rom → cubic Bézier control points
+          // tension = 0.5 (standard Catmull-Rom)
+          const cp1x = ex + (p1[0] + (p2[0] - p0[0]) / 6) * zoom;
+          const cp1y = ey + (p1[1] + (p2[1] - p0[1]) / 6) * zoom;
+          const cp2x = ex + (p2[0] - (p3[0] - p1[0]) / 6) * zoom;
+          const cp2y = ey + (p2[1] - (p3[1] - p1[1]) / 6) * zoom;
+          const endx = ex + p2[0] * zoom;
+          const endy = ey + p2[1] * zoom;
+
+          offCtx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endx, endy);
+        }
+      } else {
+        // Only 2 points — straight line
+        offCtx.lineTo(ex + pts[1][0] * zoom, ey + pts[1][1] * zoom);
+      }
+
+      offCtx.strokeStyle = hlData.color;
+      offCtx.lineWidth   = strokeW;
+      offCtx.lineCap     = 'round';
+      offCtx.lineJoin    = 'round';
+      offCtx.globalAlpha = 1; // Full opacity on offscreen — alpha applied at composite
+      offCtx.stroke();
+
+      // ── Pass 2: Composite offscreen → main canvas with multiply + flat alpha ──
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = 0.35;  // 35% opacity — matches GoodNotes translucency
+      ctx.drawImage(offscreen, 0, 0, w, h);
+      ctx.restore();
+    }
+  }, []);
+
   // Redraws all uniform-dot fills onto dotCanvasRef.
   // Called after any Excalidraw state change (onChange).
   const drawUniformDots = useCallback(() => {
@@ -625,6 +799,49 @@ export default function ExcalidrawCanvas() {
       excalidrawAPI.updateLibrary({ libraryItems: LIBRARY_ITEMS, merge: true });
     }
   }, [excalidrawAPI]);
+
+  // ── Highlighter: suppress native rendering after stroke completes ────────
+  // We listen for pointerup on the canvas. After the user lifts their pen,
+  // we wait 300ms (giving Excalidraw time to finalize the element), then
+  // set opacity=5 on any tagged highlighter elements that still have opacity=100.
+  // This deferred approach avoids the fatal bug where updateScene() during
+  // an active freedraw gesture aborts it after 1 point.
+  useEffect(() => {
+    if (!excalidrawAPI) return;
+
+    const onPointerUp = () => {
+      if ((window as any).activePenType !== 'highlighter') return;
+
+      setTimeout(() => {
+        const api = apiRef.current;
+        if (!api) return;
+
+        const elements = api.getSceneElements() as any[];
+        let changed = false;
+        const updated = elements.map((el: any) => {
+          if (
+            highlighterSetRef.current.has(el.id) &&
+            el.opacity !== 5 &&
+            !el.isDeleted
+          ) {
+            changed = true;
+            return { ...el, opacity: 5 };
+          }
+          return el;
+        });
+
+        if (changed) {
+          api.updateScene({ elements: updated });
+          persistHighlighterIds();
+          drawHighlighter();
+        }
+      }, 300); // 300ms delay ensures Excalidraw has fully finalized the stroke
+    };
+
+    // Attach to window so it fires even if pointer leaves the canvas
+    window.addEventListener('pointerup', onPointerUp);
+    return () => window.removeEventListener('pointerup', onPointerUp);
+  }, [excalidrawAPI, persistHighlighterIds, drawHighlighter]);
 
   // ── Caveat font: Global CSS Override + UI Renaming ─────────────
   //
@@ -1274,6 +1491,19 @@ export default function ExcalidrawCanvas() {
 
   return (
     <div ref={wrapperRef} style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+      {/* ── Highlighter canvas overlay (z=2, BELOW dots and lasso) ────────── */}
+      {/* Renders behind the main Excalidraw canvas content conceptually, */}
+      {/* but since Excalidraw's native rendering of highlighted elements is */}
+      {/* suppressed (opacity:5), this overlay IS the visual representation. */}
+      <canvas
+        ref={highlighterCanvasRef}
+        style={{
+          position: "absolute", inset: 0,
+          width: "100%", height: "100%",
+          pointerEvents: "none",
+          zIndex: 3,
+        }}
+      />
       {/* ── Uniform-dots canvas overlay (z=5, below lasso at z=20) ────────── */}
       <canvas
         ref={dotCanvasRef}
@@ -1352,6 +1582,38 @@ export default function ExcalidrawCanvas() {
         excalidrawAPI={handleExcalidrawAPI}
         UIOptions={uiOptions}
         renderTopRightUI={renderTopRightUI}
+        onChange={() => {
+          // ── Highlighter detection + overlay redraw ──
+          // CRITICAL: We do NOT call updateScene() here because it aborts
+          // Excalidraw's active freedraw gesture (resets the element to 1 point).
+          // Instead we only tag new elements in our ref (zero side-effects) and
+          // let the pointerup handler suppress opacity after the stroke completes.
+          const api = apiRef.current;
+          if (!api) return;
+
+          const elements = api.getSceneElements() as any[];
+          const isHighlighter = (window as any).activePenType === 'highlighter';
+
+          if (isHighlighter) {
+            // Tag any freedraw elements we haven't seen yet
+            for (const el of elements) {
+              if (el.type === 'freedraw' && !el.isDeleted && !highlighterSetRef.current.has(el.id)) {
+                // Only tag if not already a full-opacity normal stroke
+                // (opacity 100 = normal, opacity 5 = already suppressed)
+                if (el.opacity === 100) {
+                  highlighterSetRef.current.set(el.id, {
+                    color: el.strokeColor || '#ffeb3b',
+                    width: el.strokeWidth || 2,
+                  });
+                }
+              }
+            }
+          }
+
+          // Always redraw overlays (handles zoom/scroll changes too)
+          drawHighlighter();
+          drawUniformDots();
+        }}
       />
 
       <MyColorsPanel excalidrawAPI={excalidrawAPI} isCustomShapeActive={!!activeCustomTool} />

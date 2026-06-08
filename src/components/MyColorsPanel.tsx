@@ -36,6 +36,14 @@ const BrushIcon = () => (
   </svg>
 );
 
+const HighlighterIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15.22 4.97l3.81 3.81-9.9 9.9a2 2 0 01-1 .54l-3.54.71.71-3.54a2 2 0 01.54-1l9.38-10.42z"/>
+    <path d="M18 2l4 4-2 2-4-4 2-2z"/>
+    <rect x="2" y="20" width="10" height="3" rx="1" fill="currentColor" opacity="0.25"/>
+  </svg>
+);
+
 interface Props { excalidrawAPI: any | null; isCustomShapeActive?: boolean; }
 
 export default function MyColorsPanel({ excalidrawAPI, isCustomShapeActive }: Props) {
@@ -50,7 +58,7 @@ export default function MyColorsPanel({ excalidrawAPI, isCustomShapeActive }: Pr
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [activeColor, setActiveColor] = useState<string | null>(null);
 
-  const [penType, setPenType] = useState<"fountain" | "ball" | "brush">("fountain");
+  const [penType, setPenType] = useState<"fountain" | "ball" | "brush" | "highlighter">("fountain");
   const [tipSharpness, setTipSharpness] = useState(50);
   const [pressureSens, setPressureSens] = useState(50);
   const [stabilization, setStabilization] = useState(0);
@@ -337,6 +345,7 @@ export default function MyColorsPanel({ excalidrawAPI, isCustomShapeActive }: Pr
               { id: "fountain", label: "Fountain", icon: <FountainIcon /> },
               { id: "ball", label: "Ball Pen", icon: <BallPenIcon /> },
               { id: "brush", label: "Brush", icon: <BrushIcon /> },
+              { id: "highlighter", label: "Highlight", icon: <HighlighterIcon /> },
             ].map(pen => (
               <button
                 key={pen.id}
@@ -373,7 +382,7 @@ export default function MyColorsPanel({ excalidrawAPI, isCustomShapeActive }: Pr
                 {[
                   { label: "Tip Sharp", val: tipSharpness, set: setTipSharpness, show: penType === 'fountain' },
                   { label: "Pressure", val: pressureSens, set: setPressureSens, show: penType === 'fountain' || penType === 'brush' },
-                  { label: "Stabilize", val: stabilization, set: setStabilization, show: true },
+                  { label: "Stabilize", val: stabilization, set: setStabilization, show: penType !== 'highlighter' },
                 ].map(s => s.show && (
                   <div key={s.label} style={{ marginBottom: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
