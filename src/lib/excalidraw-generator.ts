@@ -37,6 +37,9 @@ export function generateTextElement(
     textAlign: "left",
     verticalAlign: "top",
     baseline: fontSize - 4,
+    lineHeight: 1.25,
+    originalText: text,
+    containerId: null,
   };
 }
 

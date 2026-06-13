@@ -16,6 +16,25 @@ const COLOR_MAP: Record<string, { bg: string, stroke: string, text: string }> = 
   warning:    { bg: "#fee2e2", stroke: "#dc2626", text: "#7f1d1d" }  // Red
 };
 
+function wrapText(text: string, maxCharsPerLine: number): string {
+  if (!text) return "";
+  const words = text.split(' ');
+  let wrappedText = '';
+  let currentLine = '';
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if ((currentLine + word).length > maxCharsPerLine) {
+      wrappedText += currentLine.trim() + '\n';
+      currentLine = word + ' ';
+    } else {
+      currentLine += word + ' ';
+    }
+  }
+  wrappedText += currentLine.trim();
+  return wrappedText;
+}
+
 export function convertAIToCanvas(data: AIData) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const elements: any[] = [];
@@ -61,17 +80,18 @@ export function convertAIToCanvas(data: AIData) {
     const colors = COLOR_MAP[typeKey];
     
     const padding = 24;
-    const heading = block.heading || "";
-    const body = block.body || "";
+    const rawHeading = block.heading || "";
+    const rawBody = block.body || "";
     
-    // ── Safe Height Calculation ──
-    // Caveat font size 20 is ~11px wide per char. Box is 450 - 48 = 402px usable width.
-    // So roughly 36 chars per line.
-    const headingLines = Math.max(1, Math.ceil(heading.length / 32));
-    const bodyLines = Math.max(1, Math.ceil(body.length / 36));
+    // ── Safe Text Wrapping & Height Calculation ──
+    const heading = wrapText(rawHeading, 30); // Font size 24 -> ~30 chars
+    const body = wrapText(rawBody, 38);       // Font size 20 -> ~38 chars
     
-    // Add extra padding at the bottom so text never bleeds out of the sticky note
-    const boxHeight = (padding * 2) + (headingLines * 28) + (bodyLines * 24) + 32;
+    const headingLines = heading.split('\n').length;
+    const bodyLines = body ? body.split('\n').length : 0;
+    
+    // Calculate box height dynamically based on the exact wrapped lines
+    const boxHeight = (padding * 2) + (headingLines * 28) + (bodyLines * 24) + (body ? 16 : 0);
     
     // ── Decide which column to put this block in (the shorter one) ──
     let currentX: number;
