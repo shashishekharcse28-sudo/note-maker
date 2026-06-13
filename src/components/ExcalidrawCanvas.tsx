@@ -484,6 +484,9 @@ const ExcalidrawWithMenu = dynamic(
 export default function ExcalidrawCanvas() {
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
 
+  const studyosFillBtnsRef = useRef<HTMLButtonElement[]>([]);
+  const studyosDotsBtnsRef = useRef<HTMLButtonElement[]>([]);
+
   // UI state — drives button highlight only
   const [activeCustomTool, setActiveCustomTool] = useState<ShapeName | null>(null);
 
@@ -495,6 +498,7 @@ export default function ExcalidrawCanvas() {
   const lassoSvgRef     = useRef<SVGSVGElement>(null);
   const lassoPathRef    = useRef<SVGPathElement>(null);
   const lassoFillRef    = useRef<SVGPathElement>(null);
+  const canvasRectRef   = useRef<DOMRect | null>(null);
 
   // ── Uniform-dots canvas overlay ──────────────────────────────────────────
   // Maps elId → intended dot color (stored when user clicks Dots button,
@@ -771,19 +775,23 @@ export default function ExcalidrawCanvas() {
       const spacing = Math.max(6,   baseSpacing * zoom);
       const dotR    = Math.max(0.8, baseDotR    * zoom);
 
-      // Align grid to a fixed origin so dots don't shift when element moves.
-      // Use integer multiples of spacing anchored at (0,0) in canvas space.
-      const colStart = Math.floor((sx) / spacing);
-      const rowStart = Math.floor((sy) / spacing);
-      const colEnd   = Math.ceil((sx + sw) / spacing);
-      const rowEnd   = Math.ceil((sy + sh) / spacing);
+      // Offscreen Canvas Pattern for Instant Rendering
+      const offscreen = new OffscreenCanvas(spacing, spacing);
+      const offCtx = offscreen.getContext('2d') as OffscreenCanvasRenderingContext2D;
+      offCtx.fillStyle = dotColor;
+      offCtx.globalAlpha = 0.7;
+      offCtx.beginPath();
+      offCtx.arc(spacing / 2, spacing / 2, dotR, 0, Math.PI * 2);
+      offCtx.fill();
 
-      for (let col = colStart; col <= colEnd; col++) {
-        for (let row = rowStart; row <= rowEnd; row++) {
-          ctx.beginPath();
-          ctx.arc(col * spacing, row * spacing, dotR, 0, Math.PI * 2);
-          ctx.fill();
-        }
+      const pattern = ctx.createPattern(offscreen, 'repeat');
+      if (pattern) {
+        // Align pattern to global grid so it doesn't shift relative to canvas
+        const domMatrix = new DOMMatrix().translate(sx % spacing, sy % spacing);
+        pattern.setTransform(domMatrix);
+        ctx.fillStyle = pattern;
+        ctx.globalAlpha = 1; // Alpha already applied to offscreen dot
+        ctx.fill();
       }
 
       ctx.restore();
@@ -1020,8 +1028,7 @@ export default function ExcalidrawCanvas() {
         });
       }
       // Mark the button active
-      const container = document.querySelector('.excalidraw');
-      container?.querySelectorAll('.studyos-dots-btn').forEach(b => b.classList.add('active'));
+      studyosDotsBtnsRef.current.forEach(b => b.classList.add('active'));
       drawUniformDots();
     };
 
@@ -1051,7 +1058,10 @@ export default function ExcalidrawCanvas() {
       if (!buttonList) return;
 
       // Remove previous injected buttons
-      buttonList.querySelectorAll('.studyos-fill-btn, .studyos-dots-btn').forEach(b => b.remove());
+      studyosDotsBtnsRef.current.forEach(b => b.remove());
+      studyosFillBtnsRef.current.forEach(b => b.remove());
+      studyosDotsBtnsRef.current = [];
+      studyosFillBtnsRef.current = [];
 
       // ─ Uniform Dots button ───────────────────────────────────────
       const dotsBtn = document.createElement('button');
@@ -1062,6 +1072,7 @@ export default function ExcalidrawCanvas() {
       dotsBtn.innerHTML = DASHED_SVG; // reuse existing icon (rows of short segments = dot rows)
       dotsBtn.addEventListener('click', applyUniformDots);
       buttonList.appendChild(dotsBtn);
+      studyosDotsBtnsRef.current.push(dotsBtn);
 
       // ─ Zigzag button(s) ─────────────────────────────────────────
       FILL_STYLES.forEach((style) => {
@@ -1079,6 +1090,7 @@ export default function ExcalidrawCanvas() {
           btn.classList.add('active');
         });
         buttonList.appendChild(btn);
+        studyosFillBtnsRef.current.push(btn);
       });
     };
 
@@ -1317,12 +1329,9 @@ export default function ExcalidrawCanvas() {
 
       // Sync active class for Zigzag fill button
       const currentFill = appState?.currentItemFillStyle;
-      document.querySelectorAll('.studyos-fill-btn').forEach((btn) => {
+      studyosFillBtnsRef.current.forEach((btn) => {
         btn.classList.toggle('active', currentFill === 'zigzag');
       });
-
-      // Redraw uniform dots overlay on every scene change
-      drawUniformDots();
     });
     return unsub;
   }, [excalidrawAPI, deactivateCustomTool]);
@@ -1350,6 +1359,7 @@ export default function ExcalidrawCanvas() {
       const cvs = getCanvas();
       if (!cvs) return;
       const rect = cvs.getBoundingClientRect();
+      canvasRectRef.current = rect;
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
 
@@ -1364,9 +1374,9 @@ export default function ExcalidrawCanvas() {
 
     function onLassoMove(e: PointerEvent) {
       if (!lassoDrawingRef.current || !isLassoRef.current) return;
-      const cvs = getCanvas();
-      if (!cvs) return;
-      const rect = cvs.getBoundingClientRect();
+      const rect = canvasRectRef.current;
+      if (!rect) return;
+      
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
 
@@ -1390,6 +1400,7 @@ export default function ExcalidrawCanvas() {
         // Too small a gesture — treat as a click, clear and bail
         if (lassoSvgRef.current) lassoSvgRef.current.style.visibility = "hidden";
         lassoPointsRef.current = [];
+        canvasRectRef.current = null;
         return;
       }
 
@@ -1397,7 +1408,7 @@ export default function ExcalidrawCanvas() {
       const cvs = getCanvas();
       const api = apiRef.current;
       if (!cvs || !api) return;
-      const rect      = cvs.getBoundingClientRect();
+      
       const appState  = api.getAppState();
       const zoom      = appState.zoom.value;
       const scrollX   = appState.scrollX;
@@ -1440,6 +1451,7 @@ export default function ExcalidrawCanvas() {
       isLassoRef.current = false;
       setIsLassoActive(false);
       lassoPointsRef.current = [];
+      canvasRectRef.current = null;
       if (lassoSvgRef.current) lassoSvgRef.current.style.visibility = "hidden";
       if (lassoPathRef.current) lassoPathRef.current.setAttribute("d", "");
       if (lassoFillRef.current) lassoFillRef.current.setAttribute("d", "");
@@ -1508,6 +1520,62 @@ export default function ExcalidrawCanvas() {
       />
     </div>
   ), [isLassoActive, activeCustomTool, deactivateCustomTool, activateCustomTool]);
+
+  // ── requestAnimationFrame Render Loop for Overlays ──
+  const lastRenderStateRef = useRef({
+    zoom: 0,
+    scrollX: 0,
+    scrollY: 0,
+    elementsLength: 0,
+    elementsVersionNonce: 0,
+  });
+
+  useEffect(() => {
+    let rafId: number;
+
+    const renderLoop = () => {
+      const api = apiRef.current;
+      if (api) {
+        const appState = api.getAppState();
+        const elements = api.getSceneElements();
+
+        if (appState && elements) {
+          const currentZoom = appState.zoom.value;
+          const currentScrollX = appState.scrollX;
+          const currentScrollY = appState.scrollY;
+          const currentLength = elements.length;
+          const currentNonce = elements.length > 0 ? elements[0].versionNonce : 0;
+
+          const last = lastRenderStateRef.current;
+
+          if (
+            currentZoom !== last.zoom ||
+            currentScrollX !== last.scrollX ||
+            currentScrollY !== last.scrollY ||
+            currentLength !== last.elementsLength ||
+            currentNonce !== last.elementsVersionNonce
+          ) {
+            // State mutated, we must redraw overlays
+            last.zoom = currentZoom;
+            last.scrollX = currentScrollX;
+            last.scrollY = currentScrollY;
+            last.elementsLength = currentLength;
+            last.elementsVersionNonce = currentNonce;
+
+            drawHighlighter();
+            drawUniformDots();
+          }
+        }
+      }
+      rafId = requestAnimationFrame(renderLoop);
+    };
+
+    rafId = requestAnimationFrame(renderLoop);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [drawHighlighter, drawUniformDots]);
 
   return (
     <div ref={wrapperRef} style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
@@ -1692,9 +1760,7 @@ export default function ExcalidrawCanvas() {
             }
           }
 
-          // Always redraw overlays (handles zoom/scroll changes too)
-          drawHighlighter();
-          drawUniformDots();
+          // Overlays are now drawn by the requestAnimationFrame loop to prevent input lag.
         }}
       />
 

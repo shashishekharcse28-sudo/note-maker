@@ -1,0 +1,269 @@
+================================================================================
+  STUDYOS — IMPLEMENTATION PLAN (FINAL)
+  "Paste → Beautiful Notes" — Full Build Plan
+  Lead Engineer: Antigravity
+  Date: 2026-06-11
+================================================================================
+
+  This is not a discussion. This is the BUILD PLAN.
+  I've made every technical decision. You just need to:
+    1. Tell me which AI API key you have (OpenAI / Gemini / Claude)
+    2. Say "let's go" — and I start building
+
+================================================================================
+THE PRODUCT IN ONE SENTENCE
+================================================================================
+
+  StudyOS: Paste any AI-generated content → get stunning, professional
+  study notes with diagrams and figures → edit them in your notebook
+  alongside a freehand drawing canvas.
+
+================================================================================
+HOW IT WORKS (User's Perspective)
+================================================================================
+
+  STEP 1: User clicks "✨ New from AI" button in the NavBar
+          → A beautiful full-screen modal opens
+
+  STEP 2: User pastes their ChatGPT/Gemini/Claude response into the modal
+          → Raw text appears in a textarea
+
+  STEP 3: User clicks "Generate Notes ✨"
+          → Loading animation plays (2-5 seconds)
+          → Behind the scenes:
+             a) We send the raw text to the AI API
+             b) AI returns structured, beautified HTML with:
+                - Proper headings, subheadings
+                - Definition boxes, example cards, key highlights
+                - Mermaid diagram code for any processes/cycles
+                - Image descriptions (which we then generate)
+             c) We render the HTML into the TipTap editor
+             d) Mermaid diagrams auto-render as SVG
+             e) AI-generated images load in (if applicable)
+
+  STEP 4: Beautiful notes appear in the notebook panel
+          → User can edit anything — text, headings, reorder blocks
+          → User can draw on the canvas beside the notes
+          → Everything auto-saves
+
+  THAT'S IT. Paste → Click → Beautiful notes. Done.
+
+================================================================================
+TECHNICAL ARCHITECTURE
+================================================================================
+
+  Here's what we build, and in what order:
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │                          STUDYOS ARCHITECTURE                          │
+  │                                                                        │
+  │  ┌─────────────┐     ┌──────────────┐     ┌────────────────────────┐  │
+  │  │  PASTE      │────>│  AI ENGINE   │────>│  NOTE RENDERER         │  │
+  │  │  MODAL      │     │  (API call)  │     │  (TipTap + Mermaid)    │  │
+  │  │             │     │              │     │                        │  │
+  │  │ - textarea  │     │ - Formats    │     │ - Callout boxes        │  │
+  │  │ - generate  │     │   content    │     │ - Colored sections     │  │
+  │  │   button    │     │ - Adds       │     │ - Auto diagrams        │  │
+  │  │ - style     │     │   structure  │     │ - Key term highlights  │  │
+  │  │   picker    │     │ - Suggests   │     │ - Editable by user     │  │
+  │  │             │     │   diagrams   │     │                        │  │
+  │  └─────────────┘     └──────────────┘     └────────────────────────┘  │
+  │                                                    │                   │
+  │                                                    v                   │
+  │                                           ┌────────────────────┐      │
+  │                                           │  NOTEBOOK          │      │
+  │                                           │  (Split View)      │      │
+  │                                           │                    │      │
+  │                                           │  LEFT: TipTap     │      │
+  │                                           │  RIGHT: Excalidraw │      │
+  │                                           │                    │      │
+  │                                           │  Auto-saves to     │      │
+  │                                           │  localStorage      │      │
+  │                                           └────────────────────┘      │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+THE BUILD — PHASE BY PHASE
+================================================================================
+
+I'm splitting this into 5 phases. Each phase delivers something working.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PHASE 1: FIX THE FOUNDATION
+Estimated time: 1 session (~2-3 hours)
+
+  What we fix:
+    [1.1] Split View toggle — make TipTap editor actually appear
+    [1.2] Document title — restore from localStorage on reload
+    [1.3] Note content persistence — save TipTap content to localStorage
+    [1.4] Install new TipTap extensions we'll need:
+          - @tiptap/extension-image (for figures)
+          - @tiptap/extension-highlight (for key terms)
+          - @tiptap/extension-color (for colored text)
+          - @tiptap/extension-text-style (required by color)
+          - @tiptap/extension-table, table-row, table-cell (for tables)
+          - @tiptap/extension-link (for links in notes)
+          - @tiptap/extension-underline (for formatting)
+
+  Why first: The notebook MUST work before we can put notes into it.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PHASE 2: THE AI ENGINE (Backend)
+Estimated time: 1 session (~2-3 hours)
+
+  What we build:
+    [2.1] Next.js API Route: /api/generate-notes
+          - Receives: raw text + style preference
+          - Sends to AI API with a carefully crafted system prompt
+          - The system prompt tells the AI to:
+            • Structure the content with H1, H2, H3 headings
+            • Wrap definitions in <div class="callout-definition">
+            • Wrap examples in <div class="callout-example">
+            • Wrap important points in <div class="callout-important">
+            • Highlight key terms with <mark>
+            • Generate Mermaid diagram code where relevant
+            • Suggest where images would help (with descriptions)
+            • Output clean HTML that TipTap can consume
+          - Returns: structured HTML + diagram code + image prompts
+
+    [2.2] API key handling:
+          - Stored in .env.local (never committed to git)
+          - Accessed via process.env in the API route
+          - We support OpenAI, Gemini, or Claude — just need to know which
+
+    [2.3] The System Prompt (this is the SECRET SAUCE):
+          - I will write a 200+ line system prompt that tells the AI exactly
+            how to format notes for maximum visual impact
+          - It will understand educational content structure
+          - It will know when to add diagrams, callouts, highlights
+          - This prompt is the CORE of the product — I'll craft it carefully
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PHASE 3: THE PASTE MODAL (Frontend)
+Estimated time: 1 session (~2-3 hours)
+
+  What we build:
+    [3.1] PasteModal.tsx — A stunning full-screen modal
+          - Glass-morphism backdrop
+          - Large textarea with rich placeholder animation
+          - "Paste from clipboard" one-click button
+          - Style selector: 4 preset styles
+            • 🎨 Colorful (vibrant callouts, colored headings)
+            • 📝 Clean (minimal, focused, professional)
+            • 🎓 Academic (formal, structured, serif accents)
+            • 🌙 Dark Study (dark cards, neon accents)
+          - "✨ Generate Notes" button with loading animation
+          - Character count + estimated generation time
+
+    [3.2] "✨ New from AI" button in NavBar
+          - Opens the PasteModal
+          - Prominent placement — this is the MAIN feature
+
+    [3.3] Generation flow:
+          - User pastes → clicks Generate
+          - Show skeleton loading animation in the TipTap panel
+          - Call /api/generate-notes
+          - Stream the response if possible (for perceived speed)
+          - Inject the HTML into TipTap editor
+          - Auto-switch to Split View so user sees the result
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PHASE 4: BEAUTIFUL NOTE STYLES (CSS + TipTap Extensions)
+Estimated time: 1 session (~2-3 hours)
+
+  What we build:
+    [4.1] Custom TipTap Node Extensions:
+          - CalloutNode — renders <div class="callout-{type}"> as styled
+            blocks with icons (💡 Definition, ⚡ Example, ⚠️ Important)
+          - DiagramNode — renders Mermaid code as live SVG diagrams
+          - ImageFigure — renders images with captions
+
+    [4.2] Note Styles CSS (note-styles.css):
+          - Callout boxes with left border + icon + colored background
+          - Key term highlights (gradient background on <mark>)
+          - Styled headings with subtle underlines and section numbers
+          - Code blocks with syntax highlighting colors
+          - Tables with alternating row colors
+          - Blockquotes with elegant left border
+          - Smooth transitions and hover effects on all elements
+
+    [4.3] Mermaid.js integration:
+          - Lazy-load mermaid library (it's large ~500KB)
+          - Auto-render any ```mermaid code blocks as diagrams
+          - Diagrams are editable — click to see the code, edit, re-render
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PHASE 5: AI FIGURES + POLISH
+Estimated time: 1-2 sessions (~3-5 hours)
+
+  What we build:
+    [5.1] AI Image Generation:
+          - When AI identifies "an image would help here", it returns an
+            image prompt description
+          - We send that to the image generation API (DALL-E / Gemini)
+          - Image loads async — shows skeleton loader while generating
+          - Inserted into the note with a caption
+
+    [5.2] Multi-notebook support:
+          - Sidebar with list of notebooks
+          - Create / rename / delete notebooks
+          - Each notebook = separate localStorage key
+          - Each has its own TipTap content + Excalidraw state
+
+    [5.3] Export:
+          - "Export as PDF" — renders the TipTap HTML to a downloadable PDF
+          - "Export as PNG" — screenshot the note panel
+
+    [5.4] Final polish:
+          - Smooth animations on all transitions
+          - Error handling (API failures, rate limits)
+          - Empty states with helpful illustrations
+          - Keyboard shortcuts (Ctrl+V in navbar → open paste modal)
+
+================================================================================
+FILES WE'LL CREATE / MODIFY
+================================================================================
+
+  NEW FILES:
+    src/components/PasteModal.tsx        — The paste + generate modal UI
+    src/components/NoteRenderer.tsx      — Renders AI output into TipTap
+    src/components/MermaidBlock.tsx       — Renders Mermaid diagrams
+    src/components/CalloutBlock.tsx      — Styled callout box component
+    src/components/NotebookSidebar.tsx   — Multi-notebook sidebar (Phase 5)
+    src/app/api/generate-notes/route.ts  — AI API endpoint
+    src/lib/ai-prompt.ts                 — The system prompt for AI
+    src/lib/note-styles.ts               — Style templates
+    src/styles/note-styles.css           — CSS for beautiful notes
+    .env.local                           — API key (gitignored)
+
+  MODIFIED FILES:
+    src/components/NavBar.tsx            — Add "New from AI" button
+    src/components/TipTapEditor.tsx      — Add new extensions, content API
+    src/components/SplitView.tsx         — Fix split view toggle
+    src/app/globals.css                  — Add note styling variables
+    src/app/page.tsx                     — Wire up new components
+    package.json                         — New dependencies
+
+================================================================================
+WHAT I NEED FROM YOU
+================================================================================
+
+  Just TWO things:
+
+  1. WHICH AI API KEY DO YOU HAVE?
+     □ OpenAI (GPT-4 / GPT-4o) — also gives DALL-E for images
+     □ Google Gemini (Gemini Pro / Gemini Flash)
+     □ Anthropic Claude
+     □ Other (tell me which)
+
+  2. SAY "LET'S GO"
+     — and I start building Phase 1 immediately.
+
+================================================================================
+END OF IMPLEMENTATION PLAN
+================================================================================

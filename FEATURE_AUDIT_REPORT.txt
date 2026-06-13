@@ -1,0 +1,422 @@
+================================================================================
+  STUDYOS — FULL FEATURE AUDIT REPORT
+  Date: 2026-06-09
+  Tested by: Antigravity (Lead AI Engineer) — Automated Browser QA
+  Platform: Desktop (1536x864, Chromium, localhost:3001)
+================================================================================
+
+LEGEND
+  ✅ Working      — Feature fully functional, no issues
+  ⚠️ Partial     — Feature works but has notable bugs or UX gaps
+  ❌ Broken       — Feature non-functional or critically failing
+  Smoothness      — 1 (very rough) to 10 (flawless/polished)
+  Priority        — P1 (critical) / P2 (important) / P3 (nice to have)
+
+================================================================================
+FEATURE 1: PAGE LOAD & INITIAL UI
+================================================================================
+Status      : ✅ Working
+Smoothness  : 8/10
+Bugs Found  :
+  - Minor console warning: "NetworkError" when loading Caveat font from
+    Google CDN (harmless, fallback to system font works)
+  - "Pica: cannot use getImageData" warning fires on every image insertion
+    (browser fingerprinting protection conflict — not a code bug)
+Engineer Suggestion:
+  - Self-host Caveat font in /public/fonts/ to eliminate the CDN load error.
+    This will also improve initial load time and remove the console noise.
+  - Add a <link rel="preload"> for the font in layout.tsx.
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 2: SPLIT VIEW (TipTap + Canvas)
+--------------------------------------------------------------------------------
+Status      : ❌ Broken
+Smoothness  : 0/10
+Bugs Found  :
+  - The "SPLIT VIEW" button in the NavBar is rendered as a non-interactive
+    styled <span> (mode-pill). Clicking it does nothing — no state change,
+    no navigation, no DOM mutation.
+  - The TipTap editor component is never mounted in the DOM.
+  - The route-based split view that was present in an earlier commit
+    (ef55ac1) appears to have been partially reverted during commit 6277e25
+    ("revert: restore to commit 784fd3c").
+Engineer Suggestion:
+  - MUST FIX. Re-wire the "SPLIT VIEW" button to toggle a boolean state
+    in page.tsx. When true, render a flex-row layout with ExcalidrawCanvas
+    on the left (flex: 1.5) and TipTapEditor on the right (flex: 1).
+  - Add a draggable resize handle between the two panels (pointer-events
+    on a 4px-wide div with a resize cursor).
+  - The TipTap editor itself (TipTapEditor.tsx) is complete and working —
+    it just needs to be conditionally rendered.
+Priority    : P1 — CRITICAL (this is a core feature of StudyOS)
+
+--------------------------------------------------------------------------------
+FEATURE 3: DOCUMENT TITLE (Auto-save)
+--------------------------------------------------------------------------------
+Status      : ⚠️ Partial
+Smoothness  : 6/10
+Bugs Found  :
+  - Editing the title field and pressing Enter correctly shows "Autosaved"
+    and writes to localStorage key "studyos-doc-title".
+  - BUG: On page reload, the title resets to "Untitled Document" instead
+    of restoring from localStorage.
+  - Root cause: The NavBar title input initializes its defaultValue from
+    a hardcoded string, not from localStorage.
+Engineer Suggestion:
+  - In NavBar.tsx, initialize the title state with:
+      useState(() => localStorage.getItem('studyos-doc-title') || 'Untitled Document')
+  - Wrap in typeof window check for SSR safety.
+  - Also consider debounced auto-save on every keystroke (not just Enter).
+Priority    : P2
+
+--------------------------------------------------------------------------------
+FEATURE 4: DRAWING — FOUNTAIN PEN
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 8/10
+Bugs Found  :
+  - Stroke rendering is smooth and immediate on pointer-down.
+  - Catmull-Rom pressure curve is active and produces natural tapers.
+  - Minor: the pen settings sliders (Tip Sharp, Pressure, Stabilize) are
+    present but their effect on the stroke feel is very subtle at mid-range
+    values. The difference between Stabilize=6 and Stabilize=80 is barely
+    perceptible.
+Engineer Suggestion:
+  - The stabilization slider should use a proper Laplacian smoothing pass
+    over the raw input points — collect the last N points into a ring buffer
+    and emit the running weighted average as the smoothed position.
+    Currently it seems to only affect Excalidraw's native smoothing param.
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 5: DRAWING — BALL PEN
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 7/10
+Bugs Found  :
+  - Visually distinct from Fountain pen (consistent width, harder edges).
+  - No bugs found.
+  - The difference between Ball Pen and Fountain Pen is subtle at default
+    settings — harder to notice for a new user.
+Engineer Suggestion:
+  - Consider adding a visual preview swatch next to each pen type button
+    showing a tiny sample stroke, so the user can immediately see the
+    visual difference without having to draw.
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 6: DRAWING — BRUSH PEN
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 7/10
+Bugs Found  :
+  - Produces a wider, more pressure-variable stroke compared to Ball Pen.
+  - No critical bugs.
+Engineer Suggestion:
+  - Brush pen strokes would benefit from a slight texture/bristle spread.
+    This could be faked by drawing 3-4 sub-strokes with slight position
+    jitter and blending them on a sub-canvas (same OffscreenCanvas technique
+    used in the highlighter).
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 7: HIGHLIGHTER TOOL — CORE RENDERING
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 8/10
+Bugs Found  :
+  - The highlight renders as a wide, semi-transparent stroke with the correct
+    multiply blend mode — text underneath remains readable.
+  - No faint middle line visible in latest build (opacity 0 + transparent
+    strokeColor fix is working correctly).
+  - Slight 300ms delay between lifting the pen and the native stroke
+    being hidden (replaced by our custom overlay). This is a known
+    architectural limitation of the deferred suppression approach.
+Engineer Suggestion:
+  - Reduce the suppression delay from 300ms to 150ms. Excalidraw typically
+    finalizes the freedraw element within ~2-3 animation frames of pointerup.
+  - Alternatively, listen to the Excalidraw `onPointerUp` prop callback
+    (not window pointerup) for more precise timing.
+Priority    : P2
+
+--------------------------------------------------------------------------------
+FEATURE 8: HIGHLIGHTER STROKE WIDTH
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 7/10
+Bugs Found  :
+  - All 3 width levels (12px / 24px / 36px) are visually distinct and
+    correctly mapped to Excalidraw's Thin / Bold / Extra Bold buttons.
+  - The width jump from Bold to Extra Bold is large — may feel jarring.
+Engineer Suggestion:
+  - Introduce a 4th intermediate size (18px for medium) so the step
+    between each level feels more gradual.
+  - Consider making the base width user-configurable via a dedicated
+    "Highlighter Width" slider in MyColorsPanel when Highlight pen is active,
+    hiding the irrelevant Tip Sharp / Pressure / Stabilize sliders.
+Priority    : P2
+
+--------------------------------------------------------------------------------
+FEATURE 9: HIGHLIGHTER OPACITY SLIDER
+--------------------------------------------------------------------------------
+Status      : ✅ Working  (after latest fix)
+Smoothness  : 8/10
+Bugs Found  :
+  - Opacity slider now correctly maps to globalAlpha in the custom overlay.
+  - No faint middle line appears at any opacity level.
+  - No bugs found post-fix.
+Engineer Suggestion:
+  - Clamp the minimum opacity the user can set to ~20% (display as 20 in
+    the slider) to prevent accidentally making highlights invisible and
+    confusing the user. Or show a toast: "Highlight at 0% is invisible."
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 10: COLOR SELECTION (My Colors)
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 8/10
+Bugs Found  :
+  - Clicking a color swatch correctly updates Excalidraw's active stroke color.
+  - Color persists across tool changes (switching from pen to shape retains
+    the color).
+  - No bugs found.
+Engineer Suggestion:
+  - Add a "Recently Used" strip of the last 5 colors used, displayed at the
+    top of the My Colors section. This is a standard pattern in all
+    professional design apps and reduces clicks significantly.
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 11: CUSTOM COLOR PICKER
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 7/10
+Bugs Found  :
+  - The HexColorPicker popup opens and closes correctly.
+  - The eyedropper tool is present (though may fail in some browsers).
+  - Picked colors are correctly added to the My Colors palette and saved
+    to localStorage.
+  - UX Issue: The picker popup can overlap the canvas area and block the
+    user from seeing what they are coloring.
+Engineer Suggestion:
+  - Reposition the picker popup to always open above or to the right of
+    the color swatch button, never below where it overlaps the canvas.
+  - Add a hex input field that is always visible (already present — good).
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 12: SHAPES TOOL (Rect / Diamond / Ellipse / Arrow / Line)
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 9/10
+Bugs Found  :
+  - All shape tools draw correctly and produce properly styled shapes.
+  - The left panel correctly switches from "Pen Settings" to the native
+    Excalidraw properties panel when a non-drawing tool is active.
+  - No bugs found.
+Engineer Suggestion:
+  - The "More Shapes" custom library (studyShapeLibrary.js) with 12
+    study-specific shapes is available in the Library panel. Consider
+    adding a prominent "Study Shapes" shortcut button in the top-right
+    toolbar for faster access.
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 13: TEXT TOOL
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 8/10
+Bugs Found  :
+  - Double-clicking the canvas creates a text input correctly.
+  - The Caveat font override works (handwriting-style font renders in text
+    elements), however the Google CDN failure means on slow connections
+    it may fall back to the default Excalifont briefly.
+  - Font picker shows "Caveat" label correctly replacing "Excalifont".
+Engineer Suggestion:
+  - Self-hosting Caveat (as noted in Feature 1) will make text tool's
+    font rendering 100% reliable, eliminating the CDN dependency.
+Priority    : P2
+
+--------------------------------------------------------------------------------
+FEATURE 14: ERASER
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 7/10
+Bugs Found  :
+  - The native Excalidraw stroke eraser works — dragging over elements
+    deletes them.
+  - NOTE: The custom EraserEngine.ts was previously removed (commit 7b82991)
+    due to performance lag. The fallback to native eraser is functional but
+    less precise — it erases entire elements, not partial strokes.
+  - Highlighter strokes can be erased, but since they are invisible native
+    elements, the user must click precisely in the area where the invisible
+    stroke geometry is, which is non-intuitive.
+Engineer Suggestion:
+  - IMPORTANT: When the eraser passes over the highlighter overlay canvas,
+    it should erase the visible overlay pixels. This requires custom hit-
+    testing: on eraser pointerdown/move, check if any highlighterSetRef
+    element's bounding box is hit, remove it from the ref, and call
+    drawHighlighter() to repaint without that element.
+Priority    : P1 — The highlighter is not properly erasable right now.
+
+--------------------------------------------------------------------------------
+FEATURE 15: UNDO / REDO
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 9/10
+Bugs Found  :
+  - Ctrl+Z and Ctrl+Y work as expected via Excalidraw's built-in history.
+  - Undo/Redo buttons in the bottom-left toolbar also work.
+  - CAVEAT: Undoing a highlighter stroke removes the native Excalidraw
+    element but does NOT immediately redraw the custom overlay canvas.
+    The overlay cleans up on the next onChange event (within ~100ms), so
+    there is a very brief visual ghost of the highlight before it disappears.
+Engineer Suggestion:
+  - In the onChange handler, immediately clean up deleted elements from
+    highlighterSetRef and call drawHighlighter() — this is already partially
+    implemented in the cleanup loop. Verify it fires fast enough.
+Priority    : P2
+
+--------------------------------------------------------------------------------
+FEATURE 16: ZOOM (Canvas)
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 9/10
+Bugs Found  :
+  - Ctrl+Scroll wheel zoom works smoothly.
+  - Toolbar zoom +/- buttons work.
+  - The custom highlighter overlay re-renders correctly at all zoom levels
+    (coordinate conversion math accounts for zoom factor).
+  - No bugs found.
+Engineer Suggestion:
+  - Add a "Fit to Screen" (Ctrl+Shift+H) shortcut hint in the UI so users
+    can quickly reset their view after zooming.
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 17: BACKGROUND DOT GRID
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 8/10
+Bugs Found  :
+  - The custom uniform dot grid renders correctly behind the canvas.
+  - Grid dots move correctly when the canvas is panned.
+  - Grid re-renders on zoom/pan via requestAnimationFrame loop.
+  - No visual artifacts found.
+Engineer Suggestion:
+  - Allow the user to toggle the grid on/off from the NavBar (settings icon).
+  - Consider offering 3 grid styles: Dots (current), Lines, and None.
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 18: SHAPE LIBRARY
+--------------------------------------------------------------------------------
+Status      : ✅ Working
+Smoothness  : 8/10
+Bugs Found  :
+  - Library sidebar opens and closes correctly.
+  - The custom Study Shapes library (12 shapes) appears in the Library panel.
+  - Shapes can be dragged onto the canvas.
+  - No bugs found.
+Engineer Suggestion:
+  - The Library button blends in with other NavBar icons. Add a tooltip
+    on hover ("Study Shape Library") to improve discoverability.
+Priority    : P3
+
+--------------------------------------------------------------------------------
+FEATURE 19: TIPTAP EDITOR (Note Panel)
+--------------------------------------------------------------------------------
+Status      : ❌ Broken (blocked by Split View bug)
+Smoothness  : N/A
+Bugs Found  :
+  - Cannot test TipTap editor because Split View is broken (Feature 2).
+  - The TipTapEditor.tsx component itself appears complete in code:
+    slash command menu is implemented, drag-to-reorder blocks exist.
+  - The editor is simply never rendered due to the Split View toggle failure.
+Engineer Suggestion:
+  - Fix Feature 2 (Split View) first — the editor will then be testable.
+  - After that, verify: slash menu (/heading, /bullet, /code), bold/italic
+    shortcuts, and drag handle for block reordering.
+Priority    : P1 (blocked by P1 Split View fix)
+
+================================================================================
+SUMMARY SCORECARD
+================================================================================
+
+Feature                         | Status    | Smoothness | Priority
+--------------------------------|-----------|------------|--------
+1. Page Load & Initial UI       | ✅        | 8/10       | P3
+2. Split View                   | ❌ BROKEN | 0/10       | P1
+3. Document Title Auto-save     | ⚠️ Partial | 6/10      | P2
+4. Fountain Pen Drawing         | ✅        | 8/10       | P3
+5. Ball Pen Drawing             | ✅        | 7/10       | P3
+6. Brush Pen Drawing            | ✅        | 7/10       | P3
+7. Highlighter Core Rendering   | ✅        | 8/10       | P2
+8. Highlighter Stroke Width     | ✅        | 7/10       | P2
+9. Highlighter Opacity Slider   | ✅        | 8/10       | P3
+10. Color Selection             | ✅        | 8/10       | P3
+11. Custom Color Picker         | ✅        | 7/10       | P3
+12. Shapes Tool                 | ✅        | 9/10       | P3
+13. Text Tool                   | ✅        | 8/10       | P2
+14. Eraser                      | ⚠️ Partial | 7/10      | P1
+15. Undo / Redo                 | ✅        | 9/10       | P2
+16. Zoom                        | ✅        | 9/10       | P3
+17. Background Dot Grid         | ✅        | 8/10       | P3
+18. Shape Library               | ✅        | 8/10       | P3
+19. TipTap Editor               | ❌ BROKEN | N/A        | P1
+
+TOTAL: 14/19 Working | 2 Partial | 2 Broken | 1 Not Testable (blocked)
+
+================================================================================
+PRIORITIZED FIX LIST (Engineer's Recommended Order)
+================================================================================
+
+--- BATCH 1: P1 CRITICAL (Fix These First) ---
+
+[1] FIX: Split View Toggle (Feature 2)
+    File: src/components/NavBar.tsx + src/app/page.tsx
+    Action: Wire "SPLIT VIEW" button to toggle a boolean prop, conditionally
+            render TipTapEditor alongside ExcalidrawCanvas in a flex layout.
+
+[2] FIX: Highlighter Eraser Hit-Testing (Feature 14)
+    File: src/components/ExcalidrawCanvas.tsx
+    Action: Add custom hit-test in onChange/eraser detection to remove
+            highlighter strokes from the overlay when native eraser passes
+            over their bounding box.
+
+--- BATCH 2: P2 IMPORTANT ---
+
+[3] FIX: Document Title Not Restoring from localStorage (Feature 3)
+    File: src/components/NavBar.tsx
+    Action: Read localStorage on mount for 'studyos-doc-title' key.
+
+[4] IMPROVE: Highlighter 300ms Suppression Delay (Feature 7)
+    File: src/components/ExcalidrawCanvas.tsx
+    Action: Reduce setTimeout from 300ms to 150ms.
+
+[5] IMPROVE: Highlighter Width Options (Feature 8)
+    File: src/components/ExcalidrawCanvas.tsx
+    Action: Show/hide relevant pen settings per pen type, add dedicated
+            highlighter size slider.
+
+[6] IMPROVE: Caveat Font Self-Hosting (Feature 1 + 13)
+    File: public/fonts/ + src/app/layout.tsx
+    Action: Download Caveat WOFF2, serve locally, remove CDN dependency.
+
+[7] IMPROVE: Undo clears highlighter overlay ghost (Feature 15)
+    File: src/components/ExcalidrawCanvas.tsx
+    Action: Verify onChange cleanup loop fires correctly on undo.
+
+--- BATCH 3: P3 POLISH ---
+
+[8] Add Recently Used Colors strip to My Colors panel
+[9] Add Fit to Screen button/shortcut to NavBar
+[10] Add toggle for Grid style in settings (Dots / Lines / Off)
+[11] Add visual stroke preview next to each pen type button
+[12] Self-host Caveat font for guaranteed font rendering
+
+================================================================================
+END OF REPORT
+================================================================================
