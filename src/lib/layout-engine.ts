@@ -18,24 +18,32 @@ const COLOR_MAP: Record<string, { bg: string, stroke: string, text: string }> = 
 
 function wrapText(text: string, maxCharsPerLine: number): string {
   if (!text) return "";
+  
+  // First, preserve existing intentional newlines
   const lines = text.split('\n');
-  const wrappedLines = lines.map(line => {
+  const wrappedLines: string[] = [];
+  
+  for (const line of lines) {
+    if (line.trim() === "") {
+      wrappedLines.push("");
+      continue;
+    }
+    
     const words = line.split(' ');
-    let wrapped = '';
     let currentLine = '';
-
+    
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
       if ((currentLine + word).length > maxCharsPerLine) {
-        wrapped += currentLine.trim() + '\n';
+        wrappedLines.push(currentLine.trim());
         currentLine = word + ' ';
       } else {
         currentLine += word + ' ';
       }
     }
-    wrapped += currentLine.trim();
-    return wrapped;
-  });
+    wrappedLines.push(currentLine.trim());
+  }
+  
   return wrappedLines.join('\n');
 }
 
@@ -51,15 +59,11 @@ export function convertAIToCanvas(data: AIData) {
   // 1. Generate the Main Title (Handwritten text, large, centered)
   const titleText = (data.title || "Study Notes").toUpperCase();
   const titleElem = generateTextElement(
-    0, -400, 
+    -750, -450, // Shift X left by half width to center visually at 0
     titleText, 
-    48, "#e2e2ef", 3000
+    48, "#e2e2ef", 1500, undefined, "center"
   );
   
-  // Excalidraw text is left-aligned by our generator, so we center it mathematically by shifting X
-  // Rough estimate of text width: chars * (fontSize * 0.5)
-  const titleEstWidth = titleText.length * 24; 
-  titleElem.x = -(titleEstWidth / 2);
   elements.push(titleElem);
   
   // ── MASONRY 2-COLUMN LAYOUT ENGINE ──
@@ -89,17 +93,14 @@ export function convertAIToCanvas(data: AIData) {
     
     // ── Safe Text Wrapping & Height Calculation ──
     const heading = wrapText(rawHeading, 30); // Font size 24 -> ~30 chars
-    const body = wrapText(rawBody, 38);       // Font size 20 -> ~38 chars
+    const body = wrapText(rawBody, 42);       // Font size 20 -> ~42 chars
     
     const headingLines = heading.split('\n').length;
     const bodyLines = body ? body.split('\n').length : 0;
     
     // Calculate box height dynamically based on the exact wrapped lines
-    const headingHeight = headingLines * 30; // 24px * 1.25
-    const bodyHeight = bodyLines * 25;       // 20px * 1.25
-    const gap = body ? 16 : 0;
-    
-    const boxHeight = (padding * 2) + headingHeight + gap + bodyHeight + 32; // 32px safety margin
+    // padding + heading + margin + body + padding + extra buffer
+    const boxHeight = (padding * 2) + (headingLines * 34) + (bodyLines * 28) + (body ? 16 : 0) + 20;
     
     // ── Decide which column to put this block in (the shorter one) ──
     let currentX: number;
@@ -124,24 +125,20 @@ export function convertAIToCanvas(data: AIData) {
     ));
     
     // Create the Heading Text inside the sticky note
-    if (heading) {
-      elements.push(generateTextElement(
-        currentX + padding, currentY + padding, 
-        heading, 
-        24, colors.text, columnWidth - padding * 2, 
-        groupId
-      ));
-    }
+    elements.push(generateTextElement(
+      currentX + padding, currentY + padding, 
+      heading, 
+      24, colors.text, columnWidth - padding * 2, 
+      groupId
+    ));
     
     // Create the Body Text below the heading
-    if (body) {
-      elements.push(generateTextElement(
-        currentX + padding, currentY + padding + headingHeight + gap, 
-        body, 
-        20, "#1e1e28", columnWidth - padding * 2, 
-        groupId
-      ));
-    }
+    elements.push(generateTextElement(
+      currentX + padding, currentY + padding + (headingLines * 28) + 8, 
+      body, 
+      20, "#1e1e28", columnWidth - padding * 2, 
+      groupId
+    ));
   }
   
   return elements;

@@ -4,15 +4,16 @@ export function generateId() {
 
 export function generateTextElement(
   x: number, y: number, text: string, fontSize: number, 
-  color: string, width: number, groupId?: string
+  color: string, width: number, groupId?: string, textAlign: string = "left"
 ) {
+  const lineCount = Math.max(1, text.split('\n').length);
   return {
     id: generateId(),
     type: "text",
     x,
     y,
     width,
-    height: fontSize * 1.25 * Math.max(1, text.split('\n').length),
+    height: fontSize * 1.35 * lineCount,
     angle: 0,
     strokeColor: color,
     backgroundColor: "transparent",
@@ -34,7 +35,7 @@ export function generateTextElement(
     text,
     fontSize,
     fontFamily: 1, // 1 is Virgil (Handwritten default in Excalidraw)
-    textAlign: "left",
+    textAlign,
     verticalAlign: "top",
     baseline: fontSize - 4,
     lineHeight: 1.25,
