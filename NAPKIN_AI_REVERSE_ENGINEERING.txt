@@ -1,0 +1,421 @@
+================================================================================
+           NAPKIN AI — FULL REVERSE ENGINEERING & LESSONS FOR STUDYOS
+================================================================================
+                       CONFIDENTIAL ENGINEERING DOCUMENT
+                       Last Updated: June 14, 2026
+================================================================================
+
+This document is a complete technical breakdown of how Napkin AI works under
+the hood, and a precise list of EVERY technology, algorithm, math concept,
+and design principle we can steal/adopt to make StudyOS world-class.
+
+================================================================================
+SECTION 1: NAPKIN AI'S CORE ARCHITECTURE (The "Design Agency" Pattern)
+================================================================================
+
+Napkin AI does NOT use a single AI model to generate images.
+It uses a MULTI-AGENT PIPELINE where each agent has a specialized role.
+Think of it like a real design agency with 4 employees:
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  USER INPUT (Raw Text)                                      │
+  │                                                              │
+  │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐   │
+  │  │  AGENT 1:    │───>│  AGENT 2:    │───>│  AGENT 3:    │   │
+  │  │  COPYWRITER  │    │  ARCHITECT   │    │  ILLUSTRATOR │   │
+  │  │              │    │  (Designer)  │    │  (Layout)    │   │
+  │  │  Extracts    │    │  Picks the   │    │  Calculates  │   │
+  │  │  concepts,   │    │  best visual │    │  exact X,Y   │   │
+  │  │  entities,   │    │  framework   │    │  positions   │   │
+  │  │  relations   │    │  (flowchart, │    │  for every   │   │
+  │  │              │    │  mind map,   │    │  box, arrow  │   │
+  │  │              │    │  timeline)   │    │  and text    │   │
+  │  └──────────────┘    └──────────────┘    └──────────────┘   │
+  │                                                ↓             │
+  │                                          ┌──────────────┐   │
+  │                                          │  AGENT 4:    │   │
+  │                                          │  STYLIST     │   │
+  │                                          │              │   │
+  │                                          │  Applies     │   │
+  │                                          │  colors,     │   │
+  │                                          │  fonts,      │   │
+  │                                          │  brand       │   │
+  │                                          │  palette     │   │
+  │                                          └──────────────┘   │
+  │                                                ↓             │
+  │                                       FINAL RENDERED VISUAL  │
+  └──────────────────────────────────────────────────────────────┘
+
+WHAT WE CAN LEARN:
+  → Right now StudyOS uses ONE single prompt that does everything.
+  → We should split our pipeline into 2 distinct AI calls:
+      Call 1: "Extract & Structure" → Outputs semantic JSON
+      Call 2: "Layout Selection" → Picks the best layout template
+  → This 2-step approach prevents the AI from being overwhelmed
+    by doing too many things at once.
+
+
+================================================================================
+SECTION 2: THE AI MODELS NAPKIN AI USES
+================================================================================
+
+Napkin AI likely uses:
+  - GPT-4o or GPT-4-turbo for semantic text analysis
+  - Possibly a fine-tuned model for intent classification (Router)
+  - Their own proprietary visual template matching model
+
+FOR STUDYOS:
+  → Our current model: gpt-4o-mini (WEAK for complex inputs)
+  → Minimum upgrade: gpt-4o (Strong reasoning, JSON compliance)
+  → Best option: gpt-4o with structured outputs (function calling)
+  → Alternative: Claude 3.5 Sonnet (best at structured data output)
+  → Budget option: Use gpt-4o-mini for simple inputs, auto-upgrade
+    to gpt-4o for inputs longer than 500 words (smart routing)
+
+
+================================================================================
+SECTION 3: SEMANTIC EXTRACTION — HOW THE AI UNDERSTANDS TEXT
+================================================================================
+
+Before Napkin AI can draw anything, it must UNDERSTAND the text.
+This is called "Semantic Graph Extraction" and involves:
+
+  1. ENTITY EXTRACTION (NER — Named Entity Recognition)
+     - Identify the KEY CONCEPTS in the text
+     - Example: "Photosynthesis", "Chlorophyll", "CO2", "Glucose"
+
+  2. RELATIONSHIP EXTRACTION (SVO — Subject-Verb-Object Triplets)
+     - Identify HOW concepts connect
+     - Example: "Chlorophyll" → CAPTURES → "Sunlight"
+     - Example: "Plants" → CONVERT → "CO2 into Glucose"
+
+  3. HIERARCHY DETECTION
+     - Identify which concepts are parent/child
+     - Example: "Photosynthesis" is the PARENT of
+       "Light Reactions" and "Dark Reactions"
+
+  4. INTENT CLASSIFICATION (The Router)
+     - Is this text a PROCESS (→ use flowchart)?
+     - Is this text a COMPARISON (→ use table/matrix)?
+     - Is this text a HIERARCHY (→ use mind map)?
+     - Is this text a TIMELINE (→ use timeline)?
+
+WHAT WE CAN LEARN:
+  → Our current prompt just says "chunk into blocks."
+  → We need to add RELATIONSHIP EXTRACTION to our JSON schema:
+    {
+      "title": "...",
+      "blocks": [...],
+      "connections": [
+        { "from": "block_id_1", "to": "block_id_2", "label": "leads to" }
+      ],
+      "layout_hint": "flowchart" | "mind_map" | "grid" | "timeline"
+    }
+  → This allows us to draw ARROWS between sticky notes automatically!
+  → The "layout_hint" lets us pick different layout algorithms.
+
+
+================================================================================
+SECTION 4: LAYOUT ALGORITHMS — THE MATH THAT MAKES IT BEAUTIFUL
+================================================================================
+
+This is Napkin AI's SECRET WEAPON. The AI does NOT decide where to put boxes.
+A DETERMINISTIC MATH ALGORITHM does. Here are the key algorithms:
+
+──────────────────────────────────────────
+4A. DAGRE (Directed Acyclic Graph Layout)
+──────────────────────────────────────────
+  WHAT: An algorithm that takes nodes + edges and calculates perfect
+        X,Y positions so that flow goes top-to-bottom or left-to-right,
+        and edges (arrows) never cross each other.
+  
+  MATH: Based on the "Sugiyama" algorithm:
+    Step 1: Assign each node to a LAYER (rank) based on dependencies.
+    Step 2: MINIMIZE EDGE CROSSINGS by permuting node order within layers.
+    Step 3: Calculate final X,Y coordinates with uniform spacing.
+  
+  USE CASE: Flowcharts, process diagrams, dependency graphs.
+  
+  NPM PACKAGE: `dagre` or `@dagrejs/dagre`
+  
+  FOR STUDYOS:
+    → When the AI detects a PROCESS or STEP-BY-STEP input,
+      use Dagre to auto-generate a flowchart layout.
+
+──────────────────────────────────────────
+4B. D3-FORCE (Force-Directed Graph Layout)
+──────────────────────────────────────────
+  WHAT: A PHYSICS SIMULATION. Each node repels other nodes (like magnets
+        with the same polarity). Connected nodes attract each other
+        (like a spring). The simulation runs until equilibrium.
+  
+  THE PHYSICS:
+    - Repulsion Force (Coulomb's Law):
+        F = k * (q1 * q2) / r²
+        Every node pushes every other node away.
+    
+    - Attraction Force (Hooke's Law / Spring):
+        F = -k * x
+        Connected nodes pull toward each other.
+    
+    - Collision Force:
+        Prevents nodes from overlapping by treating each as a circle
+        with a defined radius.
+    
+    - Center Gravity:
+        A weak force that pulls all nodes toward the center of the
+        canvas, preventing the graph from drifting off-screen.
+  
+  USE CASE: Mind maps, concept webs, organic relationship diagrams.
+  
+  NPM PACKAGE: `d3-force`
+  
+  FOR STUDYOS:
+    → When the AI detects a MIND MAP or CONCEPT WEB input,
+      use d3-force to auto-arrange blocks organically.
+    → The physics simulation makes it feel ALIVE—nodes gently bounce
+      and settle into place, which looks incredible on a whiteboard.
+
+──────────────────────────────────────────
+4C. ELK (Eclipse Layout Kernel)
+──────────────────────────────────────────
+  WHAT: An industrial-strength, enterprise-grade layout engine.
+        Supports dozens of layout algorithms out of the box.
+  
+  USE CASE: Massive, complex diagrams with nested sub-graphs.
+  
+  NPM PACKAGE: `elkjs`
+  
+  FOR STUDYOS:
+    → Overkill for now, but useful in the future if we support
+      nested/collapsible groups of sticky notes.
+
+──────────────────────────────────────────
+4D. MASONRY / GRID LAYOUT (What We Have Now)
+──────────────────────────────────────────
+  WHAT: A simple 2-column grid where items are placed in the
+        shortest column to balance height.
+  
+  MATH: Track leftY and rightY. Place each block in the column
+        with the smaller Y value.
+  
+  FOR STUDYOS:
+    → This is our CURRENT layout. It works for simple note dumps,
+      but it looks boring and "webpage-like" compared to Napkin AI.
+    → It should be the DEFAULT fallback, not the ONLY option.
+
+
+================================================================================
+SECTION 5: THE RENDERING ENGINE — HOW TO MAKE IT LOOK STUNNING
+================================================================================
+
+Napkin AI renders using SVG/Canvas with custom styling.
+WE render using Excalidraw. Here is what we're doing wrong and how to fix it:
+
+──────────────────────────────────────────
+5A. USE EXCALIDRAW'S SKELETON API (CRITICAL FIX!)
+──────────────────────────────────────────
+  RIGHT NOW: We manually construct raw JSON element objects with dozens
+  of properties (id, seed, version, versionNonce, etc). This is fragile
+  and is WHY text was disappearing — we were missing properties that
+  Excalidraw internally requires.
+
+  THE FIX: Use Excalidraw's official `convertToExcalidrawElements` API.
+  It takes a MINIMAL "skeleton" and fills in all the missing properties
+  for us automatically.
+
+  BEFORE (our current, fragile approach):
+    {
+      id: generateId(),
+      type: "text",
+      x: 100, y: 100,
+      width: 200, height: 30,
+      text: "Hello",
+      fontSize: 20,
+      fontFamily: 1,
+      strokeColor: "#000",
+      // ...20 more properties we might forget
+    }
+
+  AFTER (the correct approach):
+    import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+
+    const elements = convertToExcalidrawElements([
+      {
+        type: "rectangle",
+        id: "box-1",
+        x: 100, y: 100,
+        width: 400, height: 200,
+        backgroundColor: "#e0f2fe",
+        strokeColor: "#0284c7",
+        fillStyle: "solid",
+        roundness: { type: 3 },
+      },
+      {
+        type: "text",
+        text: "My Heading",
+        x: 120, y: 120,
+        fontSize: 24,
+        containerId: "box-1",  // ← BINDS text inside the rectangle!
+      }
+    ]);
+
+  WHY THIS IS BETTER:
+    → Excalidraw handles ALL the internal properties automatically.
+    → Text wrapping is handled NATIVELY by the engine when
+      containerId is set. No more manual wrapText() math!
+    → Text will NEVER disappear because the engine fills in
+      lineHeight, originalText, baseline, etc.
+
+──────────────────────────────────────────
+5B. BOUND TEXT (Container Binding)
+──────────────────────────────────────────
+  In Excalidraw, you can BIND a text element to a rectangle.
+  This means:
+    - The text auto-wraps to fit the rectangle's width.
+    - When you resize the rectangle, the text reflows.
+    - When you move the rectangle, the text moves with it.
+    - The text is ALWAYS perfectly centered/padded inside.
+
+  This is exactly how a real sticky note works!
+
+  TO DO THIS:
+    1. Create a rectangle element with a specific ID.
+    2. Create a text element with `containerId: rectangle_id`.
+    3. Pass both to `convertToExcalidrawElements`.
+    4. Excalidraw handles the rest.
+
+  FOR STUDYOS:
+    → This would completely eliminate our manual wrapText() function.
+    → This would eliminate text overflowing outside sticky notes.
+    → This would make the sticky notes fully interactive and resizable.
+
+
+================================================================================
+SECTION 6: VISUAL DESIGN PRINCIPLES WE CAN STEAL
+================================================================================
+
+1. COLOR PALETTES
+   Napkin AI uses carefully curated, HARMONIOUS color palettes.
+   Not random colors, but palettes from color theory:
+   
+   → Our current palette is okay but flat.
+   → We should use HSL-based palettes with consistent saturation:
+     Definition:  hsl(200, 85%, 93%) background, hsl(200, 85%, 28%) text
+     Concept:     hsl(270, 85%, 93%) background, hsl(270, 85%, 28%) text
+     Example:     hsl(48,  95%, 78%) background, hsl(48,  95%, 25%) text
+     Warning:     hsl(0,   85%, 93%) background, hsl(0,   85%, 28%) text
+
+2. CONNECTOR ARROWS
+   Napkin AI draws beautiful curved arrows between related concepts.
+   → We already have an arrow generator in excalidraw-generator.ts.
+   → We need the AI to output "connections" in its JSON.
+   → Then the layout engine should auto-draw arrows.
+
+3. ICONS / EMOJI BADGES
+   Napkin AI uses small icons next to headings to visually categorize.
+   → We can prepend emoji to headings: 📘 Definition, 💡 Concept, etc.
+   → This costs nothing and massively improves scannability.
+
+4. SHADOW & DEPTH
+   Napkin AI boxes have subtle drop shadows for depth.
+   → Excalidraw rectangles don't natively support shadows.
+   → BUT we can fake it by placing a slightly offset, darker
+     semi-transparent rectangle behind each sticky note.
+
+5. VISUAL HIERARCHY
+   → Title should be 2x larger than headings.
+   → Headings should be bold, body should be regular weight.
+   → Use font size differences: Title=48, Heading=24, Body=18.
+
+
+================================================================================
+SECTION 7: SPECIFIC ACTION ITEMS FOR STUDYOS (Priority Order)
+================================================================================
+
+PRIORITY 1 — CRITICAL (Fix fundamental output quality)
+────────────────────────────────────────────────────────
+  [ ] Switch to `convertToExcalidrawElements` Skeleton API
+      → Eliminates the "invisible text" bug permanently.
+      → Enables native text wrapping via container binding.
+      → File: src/lib/excalidraw-generator.ts (rewrite)
+
+  [ ] Upgrade AI model to gpt-4o
+      → File: .env.local → OPENAI_MODEL=gpt-4o
+      → Dramatically better JSON structure and content retention.
+
+  [ ] Add emoji badges to headings
+      → File: src/lib/layout-engine.ts
+      → Prepend: 📘 for definition, 💡 for concept,
+                 🔬 for example, ⚠️ for warning
+
+PRIORITY 2 — HIGH (Make it look like Napkin AI)
+────────────────────────────────────────────────────────
+  [ ] Add "connections" to AI JSON schema
+      → File: src/lib/ai-prompt.ts
+      → Ask AI to output relationships between blocks.
+
+  [ ] Auto-draw arrows between connected blocks
+      → File: src/lib/layout-engine.ts
+      → Use the connection data to spawn Excalidraw arrow elements.
+
+  [ ] Implement Dagre layout for process/step inputs
+      → npm install @dagrejs/dagre
+      → File: src/lib/layouts/dagre-layout.ts (new)
+      → When layout_hint === "flowchart", use Dagre.
+
+PRIORITY 3 — MEDIUM (Polish & delight)
+────────────────────────────────────────────────────────
+  [ ] Implement D3-Force layout for mind map inputs
+      → npm install d3-force
+      → File: src/lib/layouts/force-layout.ts (new)
+      → When layout_hint === "mind_map", use D3-Force.
+
+  [ ] Add subtle fake drop shadows behind sticky notes
+      → File: src/lib/layout-engine.ts
+      → Place a semi-transparent offset rectangle behind each box.
+
+  [ ] Smart AI model routing
+      → Short inputs (<500 words): use gpt-4o-mini (cheap)
+      → Long inputs (>500 words): use gpt-4o (smart)
+      → File: src/app/api/generate-notes/route.ts
+
+PRIORITY 4 — FUTURE (Reach Napkin AI parity)
+────────────────────────────────────────────────────────
+  [ ] Multi-agent pipeline (Copywriter → Architect → Illustrator)
+  [ ] Template library (pre-built layout templates)
+  [ ] Export to PNG/SVG/PDF
+  [ ] Brand/theme customization
+  [ ] Timeline layout algorithm
+  [ ] Venn diagram layout algorithm
+
+
+================================================================================
+SECTION 8: NPM PACKAGES TO INSTALL
+================================================================================
+
+  IMMEDIATE:
+    @dagrejs/dagre    — Flowchart layout algorithm
+    d3-force          — Physics-based organic layout
+
+  FUTURE:
+    elkjs             — Enterprise-grade complex layouts
+    color             — HSL color manipulation
+
+
+================================================================================
+SECTION 9: THE BOTTOM LINE — WHY OUR OUTPUT "SUCKS" RIGHT NOW
+================================================================================
+
+  1. We use gpt-4o-mini → It summarizes and deletes content.
+  2. We manually build Excalidraw JSON → Text disappears randomly.
+  3. We only have ONE layout (2-column grid) → Looks like a webpage.
+  4. We don't draw arrows → No visual relationships.
+  5. We don't have emoji badges → No visual categorization.
+  6. We have no intent classification → Every input gets the same layout.
+
+  NAPKIN AI solves ALL 6 of these problems. And now, so can we.
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================
