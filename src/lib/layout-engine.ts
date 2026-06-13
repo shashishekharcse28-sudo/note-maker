@@ -1,15 +1,15 @@
 import { generateId, generateTextElement, generateRectangleElement } from './excalidraw-generator';
 
 export interface AIData {
-  title: string;
-  blocks: {
-    type: 'definition' | 'concept' | 'example' | 'warning';
-    heading: string;
-    body: string;
+  title?: string;
+  blocks?: {
+    type?: 'definition' | 'concept' | 'example' | 'warning';
+    heading?: string;
+    body?: string;
   }[];
 }
 
-const COLOR_MAP = {
+const COLOR_MAP: Record<string, { bg: string, stroke: string, text: string }> = {
   definition: { bg: "#e0f2fe", stroke: "#0284c7", text: "#0c4a6e" }, // Blue
   concept:    { bg: "#f3e8ff", stroke: "#9333ea", text: "#3b0764" }, // Purple
   example:    { bg: "#fef08a", stroke: "#ca8a04", text: "#713f12" }, // Yellow
@@ -20,42 +20,77 @@ export function convertAIToCanvas(data: AIData) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const elements: any[] = [];
   
-  let currentX = 0;
-  let currentY = -400;
+  if (!data || !data.blocks || !Array.isArray(data.blocks)) {
+    console.error("Invalid AI data format received", data);
+    return elements;
+  }
   
-  // 1. Generate the Main Title (Handwritten text, large)
+  // 1. Generate the Main Title (Handwritten text, large, centered)
+  const titleText = (data.title || "Study Notes").toUpperCase();
   const titleElem = generateTextElement(
-    currentX, currentY, 
-    data.title.toUpperCase(), 
-    40, "#e2e2ef", 600
+    0, -400, 
+    titleText, 
+    48, "#e2e2ef", 800
   );
+  
+  // Excalidraw text is left-aligned by our generator, so we center it mathematically by shifting X
+  // Rough estimate of text width: chars * (fontSize * 0.5)
+  const titleEstWidth = titleText.length * 24; 
+  titleElem.x = -(titleEstWidth / 2);
   elements.push(titleElem);
   
-  currentY += 120; // Move down 120px for the first block
+  // ── MASONRY 2-COLUMN LAYOUT ENGINE ──
+  // Instead of a boring vertical list, we spawn sticky notes in 2 columns.
+  const columnWidth = 450;
+  const gapX = 60; // Gap between columns
+  const gapY = 40; // Gap vertically
   
-  // 2. Loop through each AI generated block and map it spatially
+  // The X coordinate for the left and right columns
+  const leftColX = -(columnWidth + (gapX / 2));
+  const rightColX = (gapX / 2);
+  
+  // Track the current Y position of the bottom of each column
+  let leftY = -280;
+  let rightY = -280;
+  
   for (const block of data.blocks) {
+    if (!block.heading && !block.body) continue;
+
     const groupId = generateId();
-    const colors = COLOR_MAP[block.type] || COLOR_MAP.concept;
+    const typeKey = block.type && COLOR_MAP[block.type] ? block.type : 'concept';
+    const colors = COLOR_MAP[typeKey];
     
-    const boxWidth = 450;
     const padding = 24;
+    const heading = block.heading || "";
+    const body = block.body || "";
     
-    // Approximate Height Calculation
-    // Excalidraw text wrapping is complex, so we approximate based on character count.
-    const headingCharsPerLine = 35;
-    const bodyCharsPerLine = 50;
+    // ── Safe Height Calculation ──
+    // Caveat font size 20 is ~11px wide per char. Box is 450 - 48 = 402px usable width.
+    // So roughly 36 chars per line.
+    const headingLines = Math.max(1, Math.ceil(heading.length / 32));
+    const bodyLines = Math.max(1, Math.ceil(body.length / 36));
     
-    const headingLines = Math.ceil(block.heading.length / headingCharsPerLine);
-    const bodyLines = Math.ceil(block.body.length / bodyCharsPerLine);
+    // Add extra padding at the bottom so text never bleeds out of the sticky note
+    const boxHeight = (padding * 2) + (headingLines * 28) + (bodyLines * 24) + 32;
     
-    // 28px height per heading line, 24px height per body line
-    const boxHeight = (padding * 2) + (headingLines * 28) + (bodyLines * 24) + 16;
+    // ── Decide which column to put this block in (the shorter one) ──
+    let currentX: number;
+    let currentY: number;
+    
+    if (leftY <= rightY) {
+      currentX = leftColX;
+      currentY = leftY;
+      leftY += boxHeight + gapY;
+    } else {
+      currentX = rightColX;
+      currentY = rightY;
+      rightY += boxHeight + gapY;
+    }
     
     // Create the Sticky Note Background
     elements.push(generateRectangleElement(
       currentX, currentY, 
-      boxWidth, boxHeight, 
+      columnWidth, boxHeight, 
       colors.bg, colors.stroke, 
       groupId
     ));
@@ -63,21 +98,18 @@ export function convertAIToCanvas(data: AIData) {
     // Create the Heading Text inside the sticky note
     elements.push(generateTextElement(
       currentX + padding, currentY + padding, 
-      block.heading, 
-      24, colors.text, boxWidth - padding * 2, 
+      heading, 
+      24, colors.text, columnWidth - padding * 2, 
       groupId
     ));
     
     // Create the Body Text below the heading
     elements.push(generateTextElement(
       currentX + padding, currentY + padding + (headingLines * 28) + 8, 
-      block.body, 
-      20, "#1e1e28", boxWidth - padding * 2, 
+      body, 
+      20, "#1e1e28", columnWidth - padding * 2, 
       groupId
     ));
-    
-    // Move down for the next block, adding a 40px gap between sticky notes
-    currentY += boxHeight + 40;
   }
   
   return elements;
