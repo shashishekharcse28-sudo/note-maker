@@ -18,21 +18,25 @@ const COLOR_MAP: Record<string, { bg: string, stroke: string, text: string }> = 
 
 function wrapText(text: string, maxCharsPerLine: number): string {
   if (!text) return "";
-  const words = text.split(' ');
-  let wrappedText = '';
-  let currentLine = '';
+  const lines = text.split('\n');
+  const wrappedLines = lines.map(line => {
+    const words = line.split(' ');
+    let wrapped = '';
+    let currentLine = '';
 
-  for (let i = 0; i < words.length; i++) {
-    const word = words[i];
-    if ((currentLine + word).length > maxCharsPerLine) {
-      wrappedText += currentLine.trim() + '\n';
-      currentLine = word + ' ';
-    } else {
-      currentLine += word + ' ';
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      if ((currentLine + word).length > maxCharsPerLine) {
+        wrapped += currentLine.trim() + '\n';
+        currentLine = word + ' ';
+      } else {
+        currentLine += word + ' ';
+      }
     }
-  }
-  wrappedText += currentLine.trim();
-  return wrappedText;
+    wrapped += currentLine.trim();
+    return wrapped;
+  });
+  return wrappedLines.join('\n');
 }
 
 export function convertAIToCanvas(data: AIData) {
@@ -49,7 +53,7 @@ export function convertAIToCanvas(data: AIData) {
   const titleElem = generateTextElement(
     0, -400, 
     titleText, 
-    48, "#e2e2ef", 800
+    48, "#e2e2ef", 3000
   );
   
   // Excalidraw text is left-aligned by our generator, so we center it mathematically by shifting X
@@ -91,7 +95,11 @@ export function convertAIToCanvas(data: AIData) {
     const bodyLines = body ? body.split('\n').length : 0;
     
     // Calculate box height dynamically based on the exact wrapped lines
-    const boxHeight = (padding * 2) + (headingLines * 28) + (bodyLines * 24) + (body ? 16 : 0);
+    const headingHeight = headingLines * 30; // 24px * 1.25
+    const bodyHeight = bodyLines * 25;       // 20px * 1.25
+    const gap = body ? 16 : 0;
+    
+    const boxHeight = (padding * 2) + headingHeight + gap + bodyHeight + 32; // 32px safety margin
     
     // ── Decide which column to put this block in (the shorter one) ──
     let currentX: number;
@@ -124,12 +132,14 @@ export function convertAIToCanvas(data: AIData) {
     ));
     
     // Create the Body Text below the heading
-    elements.push(generateTextElement(
-      currentX + padding, currentY + padding + (headingLines * 28) + 8, 
-      body, 
-      20, "#1e1e28", columnWidth - padding * 2, 
-      groupId
-    ));
+    if (body) {
+      elements.push(generateTextElement(
+        currentX + padding, currentY + padding + headingHeight + gap, 
+        body, 
+        20, "#1e1e28", columnWidth - padding * 2, 
+        groupId
+      ));
+    }
   }
   
   return elements;
