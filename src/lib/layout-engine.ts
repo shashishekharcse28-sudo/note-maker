@@ -116,12 +116,15 @@ export function convertAIToCanvas(data: AIData) {
       rightY += boxHeight + gapY;
     }
     
+    // Create a slight, organic tilt for realism (between -0.015 and 0.015 radians)
+    const tilt = (Math.random() - 0.5) * 0.03;
+    
     // Create the Sticky Note Background
     elements.push(generateRectangleElement(
       currentX, currentY, 
       columnWidth, boxHeight, 
       colors.bg, colors.stroke, 
-      groupId
+      groupId, tilt
     ));
     
     // Create the Heading Text inside the sticky note
@@ -129,7 +132,7 @@ export function convertAIToCanvas(data: AIData) {
       currentX + padding, currentY + padding, 
       heading, 
       24, colors.text, columnWidth - padding * 2, 
-      groupId
+      groupId, "left", tilt
     ));
     
     // Create the Body Text below the heading
@@ -137,7 +140,7 @@ export function convertAIToCanvas(data: AIData) {
       currentX + padding, currentY + padding + (headingLines * 28) + 8, 
       body, 
       20, "#1e1e28", columnWidth - padding * 2, 
-      groupId
+      groupId, "left", tilt
     ));
   }
   

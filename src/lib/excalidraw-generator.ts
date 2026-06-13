@@ -4,7 +4,7 @@ export function generateId() {
 
 export function generateTextElement(
   x: number, y: number, text: string, fontSize: number, 
-  color: string, width: number, groupId?: string, textAlign: string = "left"
+  color: string, width: number, groupId?: string, textAlign: string = "left", angle: number = 0
 ) {
   const lineCount = Math.max(1, text.split('\n').length);
   return {
@@ -14,7 +14,7 @@ export function generateTextElement(
     y,
     width,
     height: fontSize * 1.35 * lineCount,
-    angle: 0,
+    angle,
     strokeColor: color,
     backgroundColor: "transparent",
     fillStyle: "hachure",
@@ -46,7 +46,7 @@ export function generateTextElement(
 
 export function generateRectangleElement(
   x: number, y: number, width: number, height: number, 
-  bgColor: string, strokeColor: string, groupId?: string
+  bgColor: string, strokeColor: string, groupId?: string, angle: number = 0
 ) {
   return {
     id: generateId(),
@@ -55,7 +55,7 @@ export function generateRectangleElement(
     y,
     width,
     height,
-    angle: 0,
+    angle,
     strokeColor,
     backgroundColor: bgColor,
     fillStyle: "solid",
