@@ -1,20 +1,17 @@
-import { SYSTEM_PROMPT, getStyleInstruction } from '@/lib/ai-prompt';
-import type { NoteStyle } from '@/lib/ai-prompt';
+import { SYSTEM_PROMPT } from '@/lib/ai-prompt';
 import OpenAI from 'openai';
 
 export const dynamic = 'force-dynamic';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
 });
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { content, style = 'colorful' } = body as {
-      content: string;
-      style?: NoteStyle;
-    };
+    const { content } = body as { content: string };
 
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
       return Response.json(
@@ -30,7 +27,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const styleInstruction = getStyleInstruction(style);
     const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
     const completion = await openai.chat.completions.create({
@@ -38,27 +34,24 @@ export async function POST(request: Request) {
       messages: [
         {
           role: 'system',
-          content: SYSTEM_PROMPT + '\n\nSTYLE PREFERENCE: ' + styleInstruction,
+          content: SYSTEM_PROMPT,
         },
         {
           role: 'user',
-          content: `Transform the following content into beautiful, structured study notes:\n\n${content}`,
+          content: `Transform the following content into a structured whiteboard JSON object:\n\n${content}`,
         },
       ],
+      response_format: { type: 'json_object' },
       temperature: 0.3, // Low temp for consistent, accurate formatting
       max_tokens: 8000,
     });
 
-    const html = completion.choices[0]?.message?.content || '';
-
-    // Strip any accidental markdown code fences the model might add
-    const cleanHtml = html
-      .replace(/^```html?\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim();
+    const jsonString = completion.choices[0]?.message?.content || '{}';
+    const parsedData = JSON.parse(jsonString);
 
     return Response.json({
-      html: cleanHtml,
+      success: true,
+      data: parsedData,
       usage: completion.usage,
     });
   } catch (error: unknown) {

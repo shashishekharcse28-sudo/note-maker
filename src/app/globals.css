@@ -211,3 +211,127 @@ html, body {
 .panel-anim {
   animation: fadeSlideIn 0.35s ease both;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   AI-GENERATED NOTE STYLES
+   Applied to content returned by /api/generate-notes and rendered in TipTap
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Base callout ── */
+.callout {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  border-radius: 10px;
+  border-left: 4px solid #818cf8;
+  padding: 14px 16px;
+  margin: 1.25rem 0;
+  background: rgba(99,102,241,0.06);
+}
+
+/* ── Callout variants ── */
+.callout-definition {
+  border-left-color: #3b82f6;
+  background: rgba(59,130,246,0.07);
+}
+.callout-example {
+  border-left-color: #f59e0b;
+  background: rgba(245,158,11,0.07);
+}
+.callout-important {
+  border-left-color: #ef4444;
+  background: rgba(239,68,68,0.07);
+}
+.callout-tip {
+  border-left-color: #22c55e;
+  background: rgba(34,197,94,0.07);
+}
+
+/* ── Callout sub-elements ── */
+.callout-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+  width: 32px;
+  text-align: center;
+  margin-top: 2px;
+}
+.callout-content {
+  flex: 1;
+  min-width: 0;
+}
+.callout-title {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #4a4a7a;
+  margin-bottom: 4px;
+}
+.callout p { margin: 0; }
+
+/* ── Formula box ── */
+.formula-box {
+  display: flex;
+  justify-content: center;
+  margin: 1.25rem 0;
+  padding: 14px 20px;
+  background: #f0effe;
+  border: 1px solid #dddcf8;
+  border-radius: 10px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 1rem;
+  color: #3730a3;
+  overflow-x: auto;
+}
+
+/* ── Highlighted text ── */
+.tiptap-prose mark {
+  background: linear-gradient(120deg, rgba(253,224,71,0.5) 0%, rgba(253,224,71,0.5) 100%);
+  color: #1a1a2e;
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+
+/* ── Tables ── */
+.tiptap-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+}
+.tiptap-prose th {
+  background: #ededfc;
+  color: #2d2d6b;
+  font-weight: 700;
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid #d4d4f0;
+}
+.tiptap-prose td {
+  padding: 9px 14px;
+  border: 1px solid #e5e4f0;
+  color: #2a2a4a;
+  vertical-align: top;
+}
+.tiptap-prose tr:nth-child(even) td {
+  background: #faf9ff;
+}
+
+/* ── Blockquote (already exists, enhanced) ── */
+.tiptap-prose blockquote {
+  border-left: 3px solid var(--brand-400);
+  padding-left: 1.25rem;
+  color: #5a5a8a;
+  font-style: italic;
+  margin: 1rem 0;
+}
+
+/* ── HR divider (enhanced) ── */
+.tiptap-prose hr {
+  border: none;
+  border-top: 1px solid #e0dff5;
+  margin: 2rem 0;
+}

@@ -1,0 +1,104 @@
+================================================================================
+  STUDYOS: THE "AI TO CANVAS" FULL IMPLEMENTATION PLAN
+  Lead Engineer: Antigravity
+  Date: 2026-06-13
+================================================================================
+
+This document outlines the exact, step-by-step blueprint for discarding the text editor and building the AI-to-Canvas Spatial Engine.
+
+================================================================================
+STEP 1: THE GREAT PURGE (Cleaning House)
+================================================================================
+We start by removing everything related to the boring textbook style.
+
+1. Delete `src/app/notebook/page.tsx` and `NotebookClient.tsx`.
+2. Delete `src/components/TipTapEditor.tsx`.
+3. Delete `src/components/NotebookNavBar.tsx`.
+4. Uninstall all TipTap NPM packages to make the app lighter and faster.
+
+================================================================================
+STEP 2: REWRITE THE AI PROMPT & API (JSON Output)
+================================================================================
+We will change how the AI talks to us. Instead of HTML, it will output pure data.
+
+1. Update `src/lib/ai-prompt.ts`:
+   - Instruct the AI to act as a "Spatial Whiteboard Architect".
+   - Define a strict JSON schema:
+     {
+       "title": "Main Topic",
+       "blocks": [
+         {
+           "type": "definition" | "example" | "concept" | "warning",
+           "heading": "...",
+           "body": "..."
+         }
+       ]
+     }
+2. Update `src/app/api/generate-notes/route.ts`:
+   - Force OpenAI to return valid JSON using `response_format: { type: "json_object" }`.
+   - The API will simply pass this JSON object back to the frontend.
+
+================================================================================
+STEP 3: BUILD THE EXCALIDRAW ELEMENT GENERATOR
+================================================================================
+Excalidraw elements require a very specific JSON structure (id, x, y, width, height, strokeColor, backgroundColor, etc.).
+
+1. Create `src/lib/excalidraw-generator.ts`.
+2. Write helper functions to generate native Excalidraw elements:
+   - `generateTextElement(x, y, text, fontSize, color)`
+   - `generateRectangleElement(x, y, width, height, bgColor, strokeColor)`
+   - `generateArrowElement(startX, startY, endX, endY)`
+   - Include the "Caveat" font ID so the text looks handwritten.
+
+================================================================================
+STEP 4: BUILD THE SPATIAL LAYOUT ENGINE (The Core Math)
+================================================================================
+This is where the magic happens. We have to mathematically place the boxes so they don't overlap.
+
+1. Create `src/lib/layout-engine.ts`.
+2. Write a function `convertAIToCanvas(aiData)`:
+   - Set a starting position: `let currentY = -500;` and `let currentX = 0;`
+   - Create the Main Title text element at `(currentX, currentY)`.
+   - Increase `currentY += 150`.
+   - Loop through every `block` in `aiData.blocks`:
+     a. Determine colors based on block type (e.g., "definition" = blue background).
+     b. Calculate how tall the text will be. (Math: `characters / 40 chars_per_line * line_height`).
+     c. Create a Rectangle Element (the sticky note) with the calculated height.
+     d. Create a Text Element for the Heading and place it inside the top of the box.
+     e. Create a Text Element for the Body and place it below the Heading.
+     f. Push these elements to a massive array.
+     g. Increase `currentY += (boxHeight + 80px)` so the next box spawns below it.
+3. Return the final array of Excalidraw elements.
+
+================================================================================
+STEP 5: WIRE UP THE FRONTEND (Paste Page → Canvas)
+================================================================================
+1. Update `src/components/PastePage.tsx`:
+   - When the user clicks "Generate", send the text to the API.
+   - Receive the JSON data.
+   - Pass the JSON data into our `convertAIToCanvas()` layout engine.
+   - We get back an array of Excalidraw elements.
+   - Save these elements to `localStorage.setItem("excalidraw", JSON.stringify(elements))`.
+   - Redirect the user directly to `/canvas`.
+
+================================================================================
+STEP 6: UPDATE THE CANVAS UI
+================================================================================
+1. Update `src/app/canvas/CanvasClient.tsx`:
+   - Remove the "📝 Notes" button from the Navbar (since the notebook no longer exists).
+   - Ensure the Excalidraw component properly loads the `localStorage("excalidraw")` elements on mount (it already does this natively!).
+
+================================================================================
+THE FINAL USER EXPERIENCE
+================================================================================
+1. User goes to `/`.
+2. Pastes "Explain Black Holes".
+3. Clicks Generate.
+4. Loading spinner spins.
+5. Suddenly, user is dropped into the Infinite Canvas.
+6. Boom. 5 beautifully colored sticky notes spawn on the screen, written in a handwritten font, organized perfectly from top to bottom.
+7. User can grab a pen tool, draw a circle around a sticky note, draw an arrow to another, and add their own notes next to it.
+
+================================================================================
+Are you ready to execute STEP 1 and STEP 2?
+================================================================================

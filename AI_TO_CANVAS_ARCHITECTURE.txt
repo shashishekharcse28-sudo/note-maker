@@ -1,0 +1,99 @@
+================================================================================
+  STUDYOS: THE "AI TO INFINITE WHITEBOARD" ARCHITECTURE
+  Lead Engineer: Antigravity
+  Date: 2026-06-13
+================================================================================
+
+THE GOOD NEWS:
+You do NOT need to train a custom model from scratch on your RTX 4050! 
+Training a model is incredibly hard, expensive, and unnecessary for this. 
+OpenAI's current model (GPT-4o-mini) is already a genius at understanding text. 
+
+The secret is not teaching the AI how to draw. The secret is having the AI give us raw structured data (JSON), and building a custom "Spatial Layout Engine" in our code to draw it on the Excalidraw canvas.
+
+Here is exactly how we are going to do it, step by step:
+
+================================================================================
+PHASE 1: CHANGE THE AI PROMPT TO OUTPUT JSON (Not HTML)
+================================================================================
+Right now, the AI outputs HTML paragraphs. We will change the `ai-prompt.ts` so the AI outputs a strict JSON object. 
+
+Example of what the AI will return:
+{
+  "title": "Quantum Computing",
+  "blocks": [
+    {
+      "type": "definition",
+      "title": "What is it?",
+      "text": "Quantum computing uses quantum mechanics to process information...",
+      "color": "blue"
+    },
+    {
+      "type": "key_concept",
+      "title": "Superposition",
+      "text": "The ability of a quantum system to be in multiple states...",
+      "color": "yellow"
+    }
+  ]
+}
+
+================================================================================
+PHASE 2: BUILD THE "SPATIAL LAYOUT ENGINE" (The Magic)
+================================================================================
+Excalidraw doesn't understand paragraphs. It only understands X and Y coordinates. 
+I will write a TypeScript function called `buildCanvasElements(aiData)` that takes the JSON above and mathematically calculates where everything should go on the screen.
+
+How the math works:
+1. Start at coordinates X: 0, Y: 0.
+2. Draw the Main Title text element. 
+3. Move down 100 pixels (Y + 100).
+4. Loop through the AI blocks:
+   - For a "definition": Draw a blue rectangle (a sticky note).
+   - Draw the Title text inside the top of the rectangle.
+   - Draw the Body text inside the rectangle.
+   - Calculate how tall the text is based on the number of characters.
+   - Make the blue rectangle exactly that tall.
+   - Move down (Y + rectangle height + 50 pixels margin) for the next block.
+
+Because we control the math, the notes will NEVER overlap. They will look perfectly organized.
+
+================================================================================
+PHASE 3: INJECT INTO EXCALIDRAW
+================================================================================
+Once our Spatial Layout Engine calculates all the boxes and text elements, it returns an array of Excalidraw Elements. 
+
+We simply call Excalidraw's built-in API:
+`excalidrawAPI.updateScene({ elements: [...existingElements, ...newAIElements] })`
+
+BOOM. Instantly, a beautiful, handwritten, spatial study guide appears on the canvas. 
+Because they are native Excalidraw elements, the user can:
+- Drag the sticky notes around.
+- Change their colors.
+- Use our custom highlighter to highlight the text.
+- Draw arrows connecting one sticky note to another.
+
+================================================================================
+WHAT WE NEED TO DO (THE EXECUTION PLAN)
+================================================================================
+
+1. THE GREAT PURGE:
+   - We don't need `TipTapEditor.tsx` anymore. Delete it.
+   - We don't need `/notebook`. Delete it.
+   - We go back to having ONE single, ultimate workspace: The Canvas.
+
+2. REWRITE THE API:
+   - Change `/api/generate-notes` to force OpenAI to return `response_format: { type: "json_object" }`.
+
+3. BUILD THE ENGINE:
+   - Create `src/lib/canvas-layout-engine.ts`. This is where I will write the heavy math to calculate X/Y coordinates, box heights, text wrapping, and Excalidraw element generation.
+
+4. WIRE IT UP:
+   - When the user clicks "Generate" on the Paste Page, we send the prompt, get the JSON, run it through the Layout Engine, save the resulting Excalidraw elements to `localStorage("excalidraw")`, and redirect to the Canvas.
+
+================================================================================
+CONCLUSION
+================================================================================
+This is a massive pivot, but it is 100% the right move. 
+"AI to Whiteboard" is a completely unsaturated market. Everyone else is building text editors. You are building a digital, intelligent desk.
+
+Are you ready to scrap the text editor and build the Layout Engine?

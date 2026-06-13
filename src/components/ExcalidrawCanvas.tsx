@@ -808,6 +808,30 @@ export default function ExcalidrawCanvas() {
   // Keep apiRef in sync
   useEffect(() => { apiRef.current = excalidrawAPI; }, [excalidrawAPI]);
 
+  // ── Load AI injected notes ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!excalidrawAPI) return;
+    
+    try {
+      const pendingData = localStorage.getItem("studyos-ai-excalidraw");
+      if (pendingData) {
+        const newElements = JSON.parse(pendingData);
+        const currentElements = excalidrawAPI.getSceneElements();
+        
+        excalidrawAPI.updateScene({ elements: [...currentElements, ...newElements] });
+        
+        // Center the canvas precisely on the newly generated AI notes
+        setTimeout(() => {
+          excalidrawAPI.scrollToContent(newElements, { fitToContent: true });
+        }, 100);
+        
+        localStorage.removeItem("studyos-ai-excalidraw");
+      }
+    } catch (e) {
+      console.error("Failed to load AI notes into Excalidraw:", e);
+    }
+  }, [excalidrawAPI]);
+
   // ── Seed library ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (excalidrawAPI) {
