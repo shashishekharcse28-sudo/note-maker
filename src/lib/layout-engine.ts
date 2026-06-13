@@ -124,12 +124,14 @@ export function convertAIToCanvas(data: AIData) {
     ));
     
     // Create the Heading Text inside the sticky note
-    elements.push(generateTextElement(
-      currentX + padding, currentY + padding, 
-      heading, 
-      24, colors.text, columnWidth - padding * 2, 
-      groupId
-    ));
+    if (heading) {
+      elements.push(generateTextElement(
+        currentX + padding, currentY + padding, 
+        heading, 
+        24, colors.text, columnWidth - padding * 2, 
+        groupId
+      ));
+    }
     
     // Create the Body Text below the heading
     if (body) {
